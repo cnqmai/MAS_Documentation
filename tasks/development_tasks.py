@@ -1,5 +1,3 @@
-# tasks/development_tasks.py (Đã sửa đổi)
-
 import os
 import logging
 import re
@@ -35,9 +33,10 @@ def process_and_create_dev_guidelines_doc(task_output: str, output_base_dir_para
         doc.add_paragraph("Không có nội dung hướng dẫn phát triển dạng văn bản được tạo.")
 
     # Đảm bảo thư mục con tồn tại cho output của phase này
-    phase_output_dir = os.path.join(output_base_dir_param, "5_development")
+    # Đã sửa đổi: Thay đổi từ "5_development" thành "4_development"
+    phase_output_dir = os.path.join(output_base_dir_param, "4_development")
     os.makedirs(phase_output_dir, exist_ok=True)
-    logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 5: {phase_output_dir}")
+    logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 4: {phase_output_dir}")
 
     # Render Component Diagram
     if component_diagram_dot_code:
@@ -85,6 +84,7 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
 
 
     # Tạo thư mục con cho Phase 4 Development (nếu chưa có)
+    # Đã sửa đổi: Đảm bảo thư mục này cũng là "4_development"
     phase_output_dir = os.path.join(output_base_dir, "4_development")
     os.makedirs(phase_output_dir, exist_ok=True)
     logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 4: {phase_output_dir}")
