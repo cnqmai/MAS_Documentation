@@ -4,16 +4,29 @@ from crewai import Agent
 import logging
 
 def create_testing_agent():
-    """Tạo agent cho giai đoạn Testing."""
-    model_string = "gemini/gemini-1.5-flash-latest"
-    logging.info(f"Configuring Testing Agent with LLM: {model_string}")
+    """Tạo Agent cho Giai đoạn 5: KIỂM THỬ trong SDLC."""
 
-    qa_automation_engineer_agent = Agent(
-        role='QA Automation Engineer',
-        goal='Xây dựng kế hoạch kiểm thử, danh sách kiểm tra QA, các trường hợp/kịch bản kiểm thử, báo cáo lỗi, kế hoạch UAT, báo cáo kiểm thử bảo mật/hiệu năng và báo cáo quản lý kiểm thử.',
-        backstory='Bạn là một kỹ sư QA chuyên nghiệp với kinh nghiệm sâu rộng trong kiểm thử tự động, kiểm thử hiệu năng và bảo mật, đảm bảo sản phẩm đạt chất lượng cao nhất trước khi triển khai.',
+    model_string = "gemini/gemini-1.5-flash-latest" 
+
+    logging.info(f"Khởi tạo Testing Agent với LLM: {model_string}")
+
+    testing_agent = Agent(
+        role="QA Automation Engineer",
+        goal=(
+            "Đảm bảo chất lượng toàn diện cho hệ thống bằng cách thiết kế và thực thi các hoạt động kiểm thử. "
+            "Viết test plan, xây dựng test cases theo yêu cầu nghiệp vụ, thực thi kiểm thử thủ công và tự động, "
+            "ghi nhận lỗi và tạo báo cáo đánh giá mức độ bao phủ kiểm thử. "
+            "Đảm bảo hệ thống đạt yêu cầu chức năng, phi chức năng, và sẵn sàng triển khai."
+        ),
+        backstory=(
+            "Bạn là một chuyên gia kiểm thử phần mềm với hơn 8 năm kinh nghiệm làm việc trong các dự án lớn, đa tầng. "
+            "Bạn thành thạo việc xây dựng kế hoạch kiểm thử (Test Plan), viết test case rõ ràng và có thể tái sử dụng, "
+            "sử dụng thành thạo các công cụ kiểm thử như Selenium, Postman, Pytest, JUnit và tích hợp CI/CD với Jenkins hoặc GitHub Actions. "
+            "Bạn hiểu rõ mô hình kiểm thử Agile, có khả năng đánh giá coverage, traceability, và phối hợp hiệu quả với các Developer và Product Owner."
+        ),
         llm=model_string,
         allow_delegation=False,
         verbose=True
     )
-    return qa_automation_engineer_agent
+
+    return testing_agent

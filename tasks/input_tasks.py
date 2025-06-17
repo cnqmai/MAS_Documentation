@@ -120,7 +120,7 @@ def run_input_collection_conversation(input_agent, summary_output_dir: str):
                 # Agent đang đặt câu hỏi
                 print(f"\nAGENT HỎI: {agent_output}")
                 # Gợi ý cho người dùng nếu chưa có
-                if not conversation_history or ("TÓM CẮT" not in conversation_history[-1]): # Sửa lỗi chính tả "TÓM CẮT" thành "TÓM TẮT" nếu cần
+                if not conversation_history or ("TÓM TẮT" not in conversation_history[-1]): # Sửa lỗi chính tả "TÓM CẮT" thành "TÓM TẮT" nếu cần
                     print(" (Gợi ý: Nếu bạn muốn kết thúc và yêu cầu tóm tắt, hãy gõ 'TÓM TẮT' và nhấn Enter.)")
 
                 conversation_history.append(f"\nAGENT HỎI: {agent_output}\n")
