@@ -1,0 +1,58 @@
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <name>Smart Home System</name>
+  <description>Development and deployment of a Smart Home system.</description>
+  <tasks>
+    <task id="1.1">
+      <name>Requirement Analysis</name>
+      <duration>2 weeks</duration>
+      <resources>2 Analysts</resources>
+    </task>
+    <task id="1.2">
+      <name>System Design</name>
+      <duration>3 weeks</duration>
+      <resources>1 Architect, 1 UI/UX Designer</resources>
+    </task>
+    <!-- ... other tasks ... -->
+  </tasks>
+</project>
+```
+
+```dot
+digraph G {
+  node [shape=box];
+  "1.0 Hệ thống Smart Home" -> "1.1 Phân tích Yêu cầu";
+  "1.0 Hệ thống Smart Home" -> "1.2 Thiết kế Hệ thống";
+  "1.0 Hệ thống Smart Home" -> "1.3 Phát triển Phần mềm";
+  "1.0 Hệ thống Smart Home" -> "1.4 Kiểm thử";
+  "1.0 Hệ thống Smart Home" -> "1.5 Triển khai";
+  "1.0 Hệ thống Smart Home" -> "1.6 Tài liệu";
+  "1.0 Hệ thống Smart Home" -> "1.7 Bàn giao";
+
+  "1.1 Phân tích Yêu cầu" -> "1.1.1 Thu thập yêu cầu từ khách hàng";
+  "1.1 Phân tích Yêu cầu" -> "1.1.2 Phân tích yêu cầu chức năng";
+  "1.1 Phân tích Yêu cầu" -> "1.1.3 Phân tích yêu cầu phi chức năng";
+  "1.1 Phân tích Yêu cầu" -> "1.1.4 Tài liệu yêu cầu";
+
+  "1.2 Thiết kế Hệ thống" -> "1.2.1 Thiết kế kiến trúc hệ thống";
+  "1.2 Thiết kế Hệ thống" -> "1.2.2 Thiết kế giao diện người dùng (UI/UX)";
+  "1.2 Thiết kế Hệ thống" -> "1.2.3 Thiết kế cơ sở dữ liệu";
+  "1.2 Thiết kế Hệ thống" -> "1.2.4 Tài liệu thiết kế";
+
+  "1.3 Phát triển Phần mềm" -> "1.3.1 Phát triển ứng dụng Mobile (iOS & Android)";
+  "1.3 Phát triển Phần mềm" -> "1.3.2 Phát triển Backend Server";
+  "1.3 Phát triển Phần mềm" -> "1.3.3 Phát triển Module điều khiển thiết bị";
+  "1.3 Phát triển Phần mềm" -> "1.3.4 Tích hợp với nền tảng bên thứ ba (Google Home, Amazon Alexa, IFTTT)";
+  "1.3 Phát triển Phần mềm" -> "1.3.5 Tích hợp tự động hóa dựa trên ngữ cảnh";
+
+  "1.3.1 Phát triển ứng dụng Mobile (iOS & Android)" -> "1.3.1.1 Phát triển Frontend iOS";
+  "1.3.1 Phát triển ứng dụng Mobile (iOS & Android)" -> "1.3.1.2 Phát triển Frontend Android";
+
+  "1.4 Kiểm thử" -> "1.4.1 Lập kế hoạch kiểm thử";
+  "1.4 Kiểm thử" -> "1.4.2 Kiểm thử chức năng";
+  "1.4 Kiểm thử" -> "1.4.3 Kiểm thử hiệu năng";
+  "1.4 Kiểm thử" -> "1.4.4 Kiểm thử bảo mật";
+  "1.4 Kiểm thử" -> "1.4.5 Báo cáo kiểm thử";
+}
+```
