@@ -155,33 +155,30 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
         list: Danh sách các Task đã tạo.
     """
     # Lấy dữ liệu từ shared_memory các phase trước (điều chỉnh tên keys để khớp với thực tế)
-    deployment_plan_doc_path = shared_memory.get("phase_6_deployment", "production_implementation_plan_docx_path")
-    monitoring_guide_path = shared_memory.get("phase_6_deployment", "monitoring_and_alerting_setup_guide_path")
-    source_code_doc_path = shared_memory.get("phase_4_development", "source_code_document_path")
-    api_design_doc_path = shared_memory.get("phase_3_design", "api_design_document_path")
+    deployment_plan_doc_path = shared_memory.get("phase_6_deployment", "production_implementation_plan_docx_path") or "N/A"
+    monitoring_guide_path = shared_memory.get("phase_6_deployment", "monitoring_and_alerting_setup_guide_path") or "N/A"
+    source_code_doc_path = shared_memory.get("phase_4_development", "source_code_document_path") or "N/A"
+    api_design_doc_path = shared_memory.get("phase_3_design", "api_design_document_path") or "N/A"
 
-
-    maintenance_context_base = f"Deployment Plan: {deployment_plan_doc_path if deployment_plan_doc_path else 'N/A'}\n" \
-                               f"Monitoring Setup Guide: {monitoring_guide_path if monitoring_guide_path else 'N/A'}"
-    if not deployment_plan_doc_path and not monitoring_guide_path:
+    maintenance_context_base = f"Deployment Plan: {deployment_plan_doc_path}\n" \
+                               f"Monitoring Setup Guide: {monitoring_guide_path}"
+    if deployment_plan_doc_path == "N/A" and monitoring_guide_path == "N/A":
         logging.warning("Previous phase deployment/monitoring documents missing for maintenance tasks.")
         maintenance_context_base = "Không có tài liệu triển khai/giám sát liên quan nào được tìm thấy."
 
-    knowledge_transfer_context = f"Source Code Documentation: {source_code_doc_path if source_code_doc_path else 'N/A'}\n" \
-                                 f"API Design Document: {api_design_doc_path if api_design_doc_path else 'N/A'}"
-    if not source_code_doc_path and not api_design_doc_path:
+    knowledge_transfer_context = f"Source Code Documentation: {source_code_doc_path}\n" \
+                                 f"API Design Document: {api_design_doc_path}"
+    if source_code_doc_path == "N/A" and api_design_doc_path == "N/A":
         logging.warning("Previous phase development/design documents missing for knowledge transfer tasks.")
         knowledge_transfer_context = "Không có tài liệu mã nguồn/thiết kế API liên quan nào được tìm thấy."
-
 
     # Tạo thư mục con cho Phase 7 Maintenance (nếu chưa có)
     phase_output_dir = os.path.join(output_base_dir, "7_maintenance")
     os.makedirs(phase_output_dir, exist_ok=True)
     logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 7: {phase_output_dir}")
 
-
     # --- 1. Task: Maintenance Plan (tạo 4 tài liệu) ---
-    maintenance_plan_tasks = Task( # Tên biến đã được đổi
+    maintenance_plan_tasks = Task(
         description=(
             f"Tạo các tài liệu sau trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
             f"1. **Maintenance_and_Support_Plan.docx**: Kế hoạch chi tiết về bảo trì và hỗ trợ, bao gồm các hoạt động định kỳ, nâng cấp, vá lỗi, quản lý phiên bản và hỗ trợ kỹ thuật.\n"
@@ -207,7 +204,7 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
     )
 
     # --- 2. Task: Feedback and Post-Project Review (tạo 3 tài liệu) ---
-    feedback_review_tasks = Task( # Tên biến đã được đổi
+    feedback_review_tasks = Task(
         description=(
             f"Tạo ba tài liệu sau trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
             f"1. **Post_Project_Survey_Questionnaire.docx**: Mẫu câu hỏi khảo sát sau dự án để thu thập phản hồi từ các bên liên quan.\n"
@@ -226,14 +223,12 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
             "'- `post_project_review` cho Post_Project_Review.docx'"
         ),
         agent=project_manager_agent,
-        context=[
-            maintenance_plan_tasks # Cần context từ kế hoạch bảo trì (đã đổi tên)
-        ],
+        context=[maintenance_plan_tasks],
         callback=lambda output: process_post_project_review_documents(str(output), output_base_dir)
     )
 
     # --- 3. Task: Transition and Product Retirement (tạo 3 tài liệu) ---
-    transition_tasks = Task( # Tên biến đã được đổi
+    transition_tasks = Task(
         description=(
             f"Tạo ba tài liệu sau trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
             f"1. **Change_Request_Document_(CCR)_Template.docx**: Mẫu tài liệu yêu cầu thay đổi (Change Control Request - CCR) cho việc quản lý thay đổi trong tương lai.\n"
@@ -243,7 +238,7 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
             f"```change_request_template\n[Nội dung Mẫu Yêu cầu Thay đổi]\n```\n"
             f"```transition_plan\n[Nội dung Kế hoạch Chuyển giao]\n```\n"
             f"```retirement_plan\n[Nội dung Kế hoạch Ngừng Sản phẩm]\n```\n"
-            f"--- Context: {maintenance_context_base}" # Có thể cần thêm context từ các phase trước
+            f"--- Context: {maintenance_context_base}"
         ),
         expected_output=(
             "Một chuỗi văn bản (string) chứa nội dung cho ba tài liệu được phân tách bằng các khối mã:\n"
@@ -252,15 +247,12 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
             "'- `retirement_plan` cho Product_Retirement_Plan.docx'"
         ),
         agent=site_reliability_engineer_agent,
-        context=[
-            maintenance_plan_tasks, # Đã đổi tên
-            feedback_review_tasks # Đã đổi tên
-        ],
+        context=[maintenance_plan_tasks, feedback_review_tasks],
         callback=lambda output: process_transition_documents(str(output), output_base_dir)
     )
 
     # --- 4. Task: Support Knowledge Transfer (tạo 2 tài liệu) ---
-    support_knowledge_tasks = Task( # Tên biến đã được đổi
+    support_knowledge_tasks = Task(
         description=(
             f"Tạo hai tài liệu sau trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
             f"1. **Developer_Knowledge_Transfer_Report.md**: Báo cáo tổng hợp kiến thức kỹ thuật quan trọng cần chuyển giao cho các nhà phát triển hoặc nhóm hỗ trợ cấp cao.\n"
@@ -276,11 +268,7 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
             "'- `support_summary` cho Global_Application_Support_Summary.md'"
         ),
         agent=site_reliability_engineer_agent,
-        context=[
-            # Truy cập trực tiếp từ shared_memory thay vì dùng task output để tránh phụ thuộc chuỗi dài
-            shared_memory.get("phase_4_development", "source_code_document_path"),
-            shared_memory.get("phase_3_design", "api_design_document_path")
-        ],
+        context=[maintenance_plan_tasks],  # Chỉ dùng task hợp lệ
         callback=lambda output: process_knowledge_transfer_documents(str(output), output_base_dir)
     )
 
@@ -290,13 +278,11 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
             f"Nghiên cứu các phương pháp hay nhất (best practices) trong bảo trì và vận hành hệ thống "
             f"(ví dụ: ITIL, Site Reliability Engineering (SRE) practices, incident management). "
             f"Tổng hợp kiến thức hỗ trợ các agent khác.\n"
-            f"--- Context: Kế hoạch Bảo trì và Hỗ trợ: {shared_memory.get('phase_7_maintenance', 'maintenance_and_support_plan_path')}"
+            f"--- Context: Kế hoạch Bảo trì và Hỗ trợ: {shared_memory.get('phase_7_maintenance', 'maintenance_and_support_plan_path') or 'N/A'}"
         ),
         expected_output="Tài liệu tiếng Việt 'Maintenance_Research_Summary.md' tổng hợp các kiến thức nghiên cứu hữu ích.",
         agent=researcher_agent,
-        context=[
-            maintenance_plan_tasks # Dựa vào task tạo kế hoạch chính (đã đổi tên)
-        ],
+        context=[maintenance_plan_tasks],
         callback=lambda output: (
             logging.info(f"--- Hoàn thành Research Maintenance Best Practices Task ---"),
             write_output(os.path.join(phase_output_dir, "Maintenance_Research_Summary.md"), str(output)),

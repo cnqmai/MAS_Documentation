@@ -61,12 +61,12 @@ def process_and_create_dev_guidelines_doc(task_output: str, output_base_dir_para
     logging.info(f"--- Hoàn thành xử lý output cho Hướng dẫn Phát triển ---")
 
 
-def create_development_tasks(lead_software_engineer_agent, project_manager_agent, researcher_agent, output_base_dir):
+def create_development_tasks(development_agent, project_manager_agent, output_base_dir):
     """
     Tạo các task liên quan đến giai đoạn Phát triển.
     Args:
-        lead_software_engineer_agent: Agent chính cho Development.
-        project_manager_agent, researcher_agent: Các agent chung.
+        development_agent: Agent chính cho Development.
+        project_manager_agent: Agent chung.
         output_base_dir: Đường dẫn thư mục base.
     Returns:
         list: Danh sách các Task đã tạo.
@@ -123,7 +123,7 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
             1. Phần mô tả Tiêu chuẩn Mã hóa và Hướng dẫn Phát triển.
             2. Tiếp theo là mã Graphviz DOT cho Component Diagram được bọc trong '```dot\\n...\\n```'.
             Đảm bảo mã DOT đúng cú pháp để có thể render thành hình ảnh. (Sẽ được lưu thành 'Coding_Standards_and_Guidelines_with_Diagram.docx')"""),
-        agent=lead_software_engineer_agent,
+        agent=development_agent,
         callback=lambda output: process_and_create_dev_guidelines_doc(str(output), output_base_dir)
     )
 
@@ -156,7 +156,7 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
             1. Nội dung của Version_Control_Plan.md.
             2. Tiếp theo là dấu phân cách '--- SOURCE_CODE_REPOSITORY_CHECKLIST ---'.
             3. Nội dung của Source_Code_Repository_Checklist.md."""),
-        agent=lead_software_engineer_agent,
+        agent=development_agent,
         context=[dev_standards_task],
         callback=source_control_callback
     )
@@ -190,7 +190,7 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
             1. Nội dung của Integration_Plan.md.
             2. Tiếp theo là dấu phân cách '--- UNIT_TEST_SCRIPTS_TEMPLATE ---'.
             3. Nội dung của Unit_Test_Scripts_Template.txt."""),
-        agent=lead_software_engineer_agent,
+        agent=development_agent,
         context=[source_control_task],
         callback=integration_callback
     )
@@ -227,7 +227,7 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
             1. Nội dung của Build_and_Deployment_Plan.docx.
             2. Tiếp theo là dấu phân cách '--- BUILD_VERIFICATION_REPORT_TEMPLATE ---'.
             3. Nội dung của Build_Verification_Report_Template.docx."""),
-        agent=lead_software_engineer_agent,
+        agent=development_agent,
         context=[integration_task],
         callback=build_callback
     )
@@ -271,7 +271,7 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
             3. Nội dung của Development_Progress_Report_Template.docx.
             4. Tiếp theo là dấu phân cách '--- MIDDLEWARE_DOCUMENTATION ---'.
             5. Nội dung của Middleware_Documentation.md."""),
-        agent=lead_software_engineer_agent,
+        agent=development_agent,
         context=[build_task],
         callback=dev_docs_callback
     )
@@ -295,7 +295,7 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
             --- Context: {dev_docs_task.output.raw_output if dev_docs_task.output else 'Chưa có Development Documents.'}
         """),
         expected_output="Tài liệu tiếng Việt 'Code_Review_Checklist.md' mô tả checklist kiểm tra mã nguồn.",
-        agent=lead_software_engineer_agent,
+        agent=development_agent,
         context=[dev_docs_task], # Context should be from dev_standards_task or its output for coding_guidelines
         callback=code_review_callback
     )
@@ -321,25 +321,25 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
         callback=development_validation_callback
     )
 
-    # Task: Research Development Best Practices (Researcher)
-    def research_development_best_practices_callback(output):
-        logging.info(f"--- Hoàn thành Research Development Best Practices Task ---")
-        write_output(os.path.join(phase_output_dir, "Development_Research_Summary.md"), str(output))
-        shared_memory.set("phase_4_development", "research_summary", str(output))
-        logging.info(f"Đã lưu Development_Research_Summary.md và cập nhật shared_memory.")
+    # # Task: Research Development Best Practices (Researcher)
+    # def research_development_best_practices_callback(output):
+    #     logging.info(f"--- Hoàn thành Research Development Best Practices Task ---")
+    #     write_output(os.path.join(phase_output_dir, "Development_Research_Summary.md"), str(output))
+    #     shared_memory.set("phase_4_development", "research_summary", str(output))
+    #     logging.info(f"Đã lưu Development_Research_Summary.md và cập nhật shared_memory.")
 
-    research_development_best_practices_task = Task(
-        description=dedent(f"""
-            Nghiên cứu các phương pháp hay nhất (best practices) trong phát triển phần mềm
-            (ví dụ: Clean Code, TDD, DDD, kiến trúc phần mềm, quản lý dependency).
-            Tổng hợp kiến thức hỗ trợ các agent khác.
-            --- Design Context: {design_context_for_dev}
-        """),
-        expected_output="Tài liệu tiếng Việt 'Development_Research_Summary.md' tổng hợp các kiến thức nghiên cứu hữu ích.",
-        agent=researcher_agent,
-        context=[dev_standards_task], # Context could be broader, but starts with standards.
-        callback=research_development_best_practices_callback
-    )
+    # research_development_best_practices_task = Task(
+    #     description=dedent(f"""
+    #         Nghiên cứu các phương pháp hay nhất (best practices) trong phát triển phần mềm
+    #         (ví dụ: Clean Code, TDD, DDD, kiến trúc phần mềm, quản lý dependency).
+    #         Tổng hợp kiến thức hỗ trợ các agent khác.
+    #         --- Design Context: {design_context_for_dev}
+    #     """),
+    #     expected_output="Tài liệu tiếng Việt 'Development_Research_Summary.md' tổng hợp các kiến thức nghiên cứu hữu ích.",
+    #     agent=researcher_agent,
+    #     context=[dev_standards_task], # Context could be broader, but starts with standards.
+    #     callback=research_development_best_practices_callback
+    # )
 
     return [
         dev_standards_task, # dev_standards_tasks.py
@@ -349,5 +349,5 @@ def create_development_tasks(lead_software_engineer_agent, project_manager_agent
         dev_docs_task, # dev_docs_tasks.py
         code_review_task, # code_review_tasks.py
         development_validation_task,
-        research_development_best_practices_task
+        # research_development_best_practices_task
     ]

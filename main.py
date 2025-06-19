@@ -126,8 +126,8 @@ def run_project_crew():
 
     logging.info("--- Bắt đầu Giai đoạn 4: Phát triển và Triển khai Thử nghiệm ---")
     development_agent = create_development_agent()
-    development_tasks_list = create_development_tasks(development_agent, project_manager_agent, researcher_agent, OUTPUT_BASE_DIR)
-    development_crew = Crew(agents=[development_agent, project_manager_agent, researcher_agent], tasks=development_tasks_list, process=Process.sequential, verbose=True)
+    development_tasks_list = create_development_tasks(development_agent, project_manager_agent, OUTPUT_BASE_DIR)
+    development_crew = Crew(agents=[development_agent, project_manager_agent], tasks=development_tasks_list, process=Process.sequential, verbose=True)
     logging.info("Đang chạy Development Crew...")
     development_result = development_crew.kickoff()
     logging.info("Hoàn thành Development Crew.")
@@ -138,8 +138,8 @@ def run_project_crew():
 
     logging.info("--- Bắt đầu Giai đoạn 5: Kiểm thử và Đảm bảo Chất lượng ---")
     testing_agent = create_testing_agent()
-    testing_tasks_list = create_testing_tasks(testing_agent, project_manager_agent, researcher_agent, OUTPUT_BASE_DIR)
-    testing_crew = Crew(agents=[testing_agent, project_manager_agent, researcher_agent], tasks=testing_tasks_list, process=Process.sequential, verbose=True)
+    testing_tasks_list = create_testing_tasks(testing_agent, project_manager_agent, OUTPUT_BASE_DIR)
+    testing_crew = Crew(agents=[testing_agent, project_manager_agent], tasks=testing_tasks_list, process=Process.sequential, verbose=True)
     logging.info("Đang chạy Testing Crew...")
     testing_result = testing_crew.kickoff()
     logging.info("Hoàn thành Testing Crew.")

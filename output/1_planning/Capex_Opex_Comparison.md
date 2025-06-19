@@ -1,1 +1,0 @@
-Không có Capex Opex Comparison.
