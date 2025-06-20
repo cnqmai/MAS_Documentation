@@ -1,602 +1,708 @@
+import os
+import json
 from crewai import Task
 from utils.output_formats import create_docx, create_xlsx
 from memory.shared_memory import SharedMemory
-import os
+
+# --- Các hàm Callback đã điều chỉnh ---
+def make_docx_callback(title, filename, shared_memory, save_key):
+    def callback(output_from_agent_object):
+        print(f"Bắt đầu tạo DOCX cho: {title}...")
+        content_raw_string = (
+            getattr(output_from_agent_object, "result", None)
+            or getattr(output_from_agent_object, "response", None)
+            or getattr(output_from_agent_object, "final_output", None)
+            or str(output_from_agent_object)
+        )
+        content_raw_string = str(content_raw_string)
+        if not content_raw_string.strip():
+            print(f"⚠️  Lưu ý: Agent không trả về nội dung cho task '{title}'.")
+            return False
+        content_paragraphs = content_raw_string.split('\n')
+        docx_path = create_docx(title, content_paragraphs, filename)
+        shared_memory.save(save_key, content_raw_string)
+        if docx_path:
+            print(f"✅ DOCX '{filename}' đã tạo thành công và lưu vào SharedMemory '{save_key}'.")
+            return True
+        else:
+            print(f"❌ Lỗi: Không thể tạo DOCX '{filename}'.")
+            return False
+    return callback
+
+def make_docx_xlsx_callback(title, docx_filename, xlsx_filename, shared_memory, save_key):
+    def callback(output_from_agent_object): 
+        print(f"🚀 Bắt đầu tạo DOCX và XLSX cho: {title}...")
+        try:
+            raw_output_json_string = (
+                getattr(output_from_agent_object, "result", None)
+                or getattr(output_from_agent_object, "response", None)
+                or getattr(output_from_agent_object, "final_output", None)
+                or str(output_from_agent_object)
+            )
+            raw_output_json_string = str(raw_output_json_string)
+            if not raw_output_json_string.strip():
+                print(f"⚠️ Agent không trả về dữ liệu JSON cho task '{title}'.")
+                return False
+            parsed_output = json.loads(raw_output_json_string)
+            docx_content_raw = parsed_output.get("docx_content", "")
+            xlsx_data_raw = parsed_output.get("xlsx_data", [])
+            docx_paragraphs = docx_content_raw.split('\n')
+            docx_path = create_docx(title, docx_paragraphs, docx_filename)
+            xlsx_path = create_xlsx(xlsx_data_raw, xlsx_filename)
+            shared_memory.save(save_key, raw_output_json_string)
+            if docx_path and xlsx_path:
+                print(f"✅ DOCX '{docx_filename}' và XLSX '{xlsx_filename}' đã được tạo và lưu thành công.")
+                return True
+            else:
+                print(f"❌ Lỗi khi tạo file DOCX hoặc XLSX cho task '{title}'.")
+                return False
+        except json.JSONDecodeError as e:
+            print(f"❌ Lỗi JSON: Không thể phân tích nội dung agent cho '{title}': {e}")
+            print(f"🪵 Output nhận được: {raw_output_json_string[:500]}...")
+            return False
+        except Exception as e:
+            print(f"❌ Lỗi không xác định khi xử lý callback cho '{title}': {e}")
+            return False
+    return callback
 
 def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, planning_agent):
-    """
-    Tạo các tác vụ cho giai đoạn Lập kế hoạch (Planning Phase).
-    """
     tasks = []
+    os.makedirs(f"{output_base_dir}/1_planning", exist_ok=True)
 
-    # Tác vụ tạo Project Management Office (PMO) Checklist
-    pmo_checklist_task = Task(
+    global_context = {
+        "project_charter": shared_memory.load("project_charter"),
+        "business_case": shared_memory.load("business_case"),
+        "cost_benefit_analysis": shared_memory.load("cost_benefit_analysis"),
+        "project_team_definition": shared_memory.load("project_team_definition"),
+        "project_resource_plan": shared_memory.load("project_resource_plan"),
+        "statement_of_work": shared_memory.load("statement_of_work"),
+        "project_approval": shared_memory.load("project_approval"),
+        "risk_data_collection": shared_memory.load("risk_data_collection"),
+        "activity_worksheet": shared_memory.load("activity_worksheet"),
+        "wbs": shared_memory.load("wbs"),
+        "opportunities_summary": shared_memory.load("opportunities_summary")
+    }
+
+    # PMO Checklist
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Danh sách kiểm tra PMO (Project Management Office Checklist) dựa trên dữ liệu từ `project_charter` trong SharedMemory. "
-            "Tài liệu này kiểm tra xem PMO có cung cấp đầy đủ chức năng và công cụ cần thiết để hỗ trợ ban điều hành và các quản lý dự án không. "
-            "Nội dung phải bao gồm: mục tiêu, đối tượng, trách nhiệm tổ chức, bộ công cụ PMO, dữ liệu cần thiết, giao diện hỗ trợ. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `PMO_Checklist.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `pmo_checklist`."
+            f"Dưới đây là thông tin project_charter:\n\n"
+            f"{global_context['project_charter']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách kiểm tra PMO' (Project Management Office Checklist) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục tiêu, đối tượng, trách nhiệm tổ chức, bộ công cụ PMO, dữ liệu cần thiết, giao diện hỗ trợ. "
+            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `PMO_Checklist.docx` chứa danh sách kiểm tra PMO, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `pmo_checklist`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả project_charter từ người dùng",
+            "expected_output": "Tóm tắt thông tin về mục tiêu, vai trò, công cụ, dữ liệu PMO...",
+            "input": global_context["project_charter"]
+        }],
+        callback=make_docx_callback(
             "Danh sách kiểm tra PMO",
-            [
-                "1. Mục tiêu: Mục đích và vai trò của PMO trong dự án (lấy từ project_charter).",
-                "2. Đối tượng: Các bên liên quan sử dụng PMO.",
-                "3. Trách nhiệm tổ chức: Vai trò và trách nhiệm của PMO.",
-                "4. Bộ công cụ PMO: Các công cụ và dữ liệu cần thiết để hỗ trợ dự án.",
-                shared_memory.load("project_charter") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/PMO_Checklist.docx"
-        ) and shared_memory.save("pmo_checklist", output)
-    )
+            f"{output_base_dir}/1_planning/PMO_Checklist.docx",
+            shared_memory,
+            "pmo_checklist"
+        )
+    ))
 
-    # Tác vụ tạo Statement of Work
-    statement_of_work_task = Task(
+    # Statement of Work
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Tuyên bố công việc (Statement of Work) dựa trên dữ liệu từ `project_charter` và `business_case` trong SharedMemory. "
-            "Tài liệu này mô tả phạm vi công việc chi tiết, thời lượng và sản phẩm đầu ra để tất cả bên liên quan cùng hiểu rõ. "
-            "Nội dung phải bao gồm: mục tiêu kinh doanh, mô tả dự án, ước lượng tiến độ, chi phí, nguồn lực, kiểm soát dự án (rủi ro, vấn đề, thay đổi). "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Statement_of_Work.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `statement_of_work`."
+            f"Dưới đây là thông tin project_charter:\n\n"
+            f"{global_context['project_charter']}\n\n"
+            f"Dưới đây là thông tin business_case:\n\n"
+            f"{global_context['business_case']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Tuyên bố công việc' (Statement of Work) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục tiêu kinh doanh, mô tả dự án, ước lượng tiến độ, chi phí, nguồn lực, kiểm soát dự án (rủi ro, vấn đề, thay đổi). "
+            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Statement_of_Work.docx` chứa tuyên bố công việc, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `statement_of_work`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter' và 'business_case'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[
+            {
+                "description": "Thông tin mô tả project_charter từ người dùng",
+                "expected_output": "Tóm tắt thông tin về phạm vi, sản phẩm đầu ra, tiến độ...",
+                "input": global_context["project_charter"]
+            },
+            {
+                "description": "Thông tin mô tả business_case từ người dùng",
+                "expected_output": "Tóm tắt mục tiêu kinh doanh, lợi ích, chi phí...",
+                "input": global_context["business_case"]
+            }
+        ],
+        callback=make_docx_callback(
             "Tuyên bố công việc",
-            [
-                "1. Mục tiêu kinh doanh: Mục tiêu chính của dự án (lấy từ business_case).",
-                "2. Mô tả dự án: Phạm vi và sản phẩm đầu ra (lấy từ project_charter).",
-                "3. Ước lượng: Tiến độ, chi phí, và nguồn lực cần thiết.",
-                "4. Kiểm soát dự án: Quản lý rủi ro, vấn đề, và thay đổi.",
-                shared_memory.load("project_charter") or "Không có dữ liệu",
-                shared_memory.load("business_case") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Statement_of_Work.docx"
-        ) and shared_memory.save("statement_of_work", output)
-    )
+            f"{output_base_dir}/1_planning/Statement_of_Work.docx",
+            shared_memory,
+            "statement_of_work"
+        )
+    ))
 
-    # Tác vụ tạo Project Approval Document
-    project_approval_task = Task(
+    # Project Approval Document
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Phê duyệt dự án (Project Approval Document) dựa trên dữ liệu từ `project_charter` và `business_case` trong SharedMemory. "
-            "Tài liệu này là văn bản phê duyệt chính thức dự án bởi nhà tài trợ và các bên liên quan. "
-            "Nội dung phải bao gồm: tổng quan, mô tả dự án, thông tin phê duyệt (người phụ trách, chữ ký, ngày tháng). "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Project_Approval_Document.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `project_approval`."
+            f"Dưới đây là thông tin project_charter:\n\n"
+            f"{global_context['project_charter']}\n\n"
+            f"Dưới đây là thông tin business_case:\n\n"
+            f"{global_context['business_case']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Phê duyệt dự án' (Project Approval Document) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: tổng quan, mô tả dự án, thông tin phê duyệt (người phụ trách, chữ ký, ngày tháng). "
+            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Project_Approval_Document.docx` chứa thông tin phê duyệt dự án, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `project_approval`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter' và 'business_case'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[
+            {
+                "description": "Thông tin mô tả project_charter từ người dùng",
+                "expected_output": "Tóm tắt tổng quan dự án, phạm vi, mục tiêu...",
+                "input": global_context["project_charter"]
+            },
+            {
+                "description": "Thông tin mô tả business_case từ người dùng",
+                "expected_output": "Tóm tắt mục tiêu, lợi ích, phê duyệt...",
+                "input": global_context["business_case"]
+            }
+        ],
+        callback=make_docx_callback(
             "Phê duyệt dự án",
-            [
-                "1. Tổng quan: Mô tả ngắn gọn về dự án (lấy từ project_charter).",
-                "2. Mô tả dự án: Mục tiêu và phạm vi (lấy từ business_case).",
-                "3. Thông tin phê duyệt: Người phụ trách, chữ ký, và ngày tháng.",
-                shared_memory.load("project_charter") or "Không có dữ liệu",
-                shared_memory.load("business_case") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Project_Approval_Document.docx"
-        ) and shared_memory.save("project_approval", output)
-    )
+            f"{output_base_dir}/1_planning/Project_Approval_Document.docx",
+            shared_memory,
+            "project_approval"
+        )
+    ))
 
-    # Tác vụ tạo Cost Estimating Worksheet
-    cost_estimating_worksheet_task = Task(
+    # Cost Estimating Worksheet
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_xlsx` để tạo bảng tính Ước lượng chi phí (Cost Estimating Worksheet) dựa trên dữ liệu từ `cost_benefit_analysis` trong SharedMemory. "
-            "Bảng tính này giúp ước lượng và lập ngân sách các chi phí CNTT, bao gồm nhân lực CNTT, dịch vụ chuyên nghiệp, phần cứng, phần mềm, chi phí khác, công thức tự động tính tổng, dự phòng rủi ro và tổng chi phí. "
-            "Lưu bảng tính dưới dạng `.xlsx` trong thư mục `output/1_planning` với tên `Cost_Estimating_Worksheet.xlsx`. "
-            "Lưu kết quả vào SharedMemory với khóa `cost_estimating_worksheet`."
+            f"Dưới đây là thông tin cost_benefit_analysis:\n\n"
+            f"{global_context['cost_benefit_analysis']}\n\n"
+            "Hãy sử dụng dữ liệu trên để tạo bảng tính 'Ước lượng chi phí' (Cost Estimating Worksheet) với nội dung cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: nhân lực CNTT, dịch vụ chuyên nghiệp, phần cứng, phần mềm, chi phí khác, tổng chi phí, dự phòng rủi ro."
         ),
         agent=planning_agent,
         expected_output=(
-            "Bảng tính `Cost_Estimating_Worksheet.xlsx` chứa ước lượng chi phí, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `cost_estimating_worksheet`."
+            "Một bảng tính hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'cost_benefit_analysis'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file XLSX."
         ),
-        callback=lambda output: create_xlsx(
-            [
-                ["Category", "Description", "Estimated Cost", "Risk Contingency"],
-                ["Personnel", "IT labor costs", "TBD", "TBD"],
-                ["Services", "Professional services", "TBD", "TBD"],
-                ["Hardware", "Hardware costs", "TBD", "TBD"],
-                ["Software", "Software licenses", "TBD", "TBD"],
-                ["Other", "Miscellaneous costs", "TBD", "TBD"],
-                ["Total", "", "=SUM(C2:C5)", "=SUM(D2:D5)"]
-            ],
-            f"{output_base_dir}/1_planning/Cost_Estimating_Worksheet.xlsx"
-        ) and shared_memory.save("cost_estimating_worksheet", output)
-    )
+        context=[{
+            "description": "Thông tin mô tả cost_benefit_analysis từ người dùng",
+            "expected_output": "Tóm tắt các hạng mục chi phí, dự phòng rủi ro...",
+            "input": global_context["cost_benefit_analysis"]
+        }],
+        callback=make_docx_xlsx_callback(
+            "Ước lượng chi phí",
+            f"{output_base_dir}/1_planning/Cost_Estimating_Worksheet.docx",
+            f"{output_base_dir}/1_planning/Cost_Estimating_Worksheet.xlsx",
+            shared_memory,
+            "cost_estimating_worksheet"
+        )
+    ))
 
-    # Tác vụ tạo Development Estimating Worksheet
-    development_estimating_worksheet_task = Task(
+    # Development Estimating Worksheet
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_xlsx` để tạo bảng tính Ước lượng phát triển (Development Estimating Worksheet) dựa trên dữ liệu từ `cost_benefit_analysis` trong SharedMemory. "
-            "Bảng tính này ước lượng chi phí phát triển, bao gồm nguyên mẫu, giao diện người dùng, báo cáo, cơ sở dữ liệu, tích hợp, máy tính chi phí máy chủ, tổng hợp chi phí phát triển, phần mềm, hỗ trợ dài hạn. "
-            "Lưu bảng tính dưới dạng `.xlsx` trong thư mục `output/1_planning` với tên `Development_Estimating_Worksheet.xlsx`. "
-            "Lưu kết quả vào SharedMemory với khóa `development_estimating_worksheet`."
+            f"Dưới đây là thông tin cost_benefit_analysis:\n\n"
+            f"{global_context['cost_benefit_analysis']}\n\n"
+            "Hãy sử dụng dữ liệu trên để tạo bảng tính 'Ước lượng phát triển' (Development Estimating Worksheet) với nội dung cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: nguyên mẫu, giao diện người dùng, báo cáo, cơ sở dữ liệu, tích hợp, máy chủ, tổng hợp chi phí phát triển, phần mềm, hỗ trợ dài hạn."
         ),
         agent=planning_agent,
         expected_output=(
-            "Bảng tính `Development_Estimating_Worksheet.xlsx` chứa ước lượng chi phí phát triển, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `development_estimating_worksheet`."
+            "Một bảng tính hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'cost_benefit_analysis'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file XLSX."
         ),
-        callback=lambda output: create_xlsx(
-            [
-                ["Category", "Description", "Estimated Cost"],
-                ["Prototype", "Development of prototypes", "TBD"],
-                ["UI", "User interface development", "TBD"],
-                ["Database", "Database design and implementation", "TBD"],
-                ["Integration", "System integration", "TBD"],
-                ["Servers", "Server costs (Windows, SQL, etc.)", "TBD"],
-                ["Total", "", "=SUM(C2:C6)"]
-            ],
-            f"{output_base_dir}/1_planning/Development_Estimating_Worksheet.xlsx"
-        ) and shared_memory.save("development_estimating_worksheet", output)
-    )
+        context=[{
+            "description": "Thông tin mô tả cost_benefit_analysis từ người dùng",
+            "expected_output": "Tóm tắt các hạng mục chi phí phát triển...",
+            "input": global_context["cost_benefit_analysis"]
+        }],
+        callback=make_docx_xlsx_callback(
+            "Ước lượng phát triển",
+            f"{output_base_dir}/1_planning/Development_Estimating_Worksheet.docx",
+            f"{output_base_dir}/1_planning/Development_Estimating_Worksheet.xlsx",
+            shared_memory,
+            "development_estimating_worksheet"
+        )
+    ))
 
-    # Tác vụ tạo Project Capital vs. Expense Costs
-    capital_vs_expense_task = Task(
+    # Capital vs. Expense Costs
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_xlsx` để tạo bảng tính Chi phí vốn so với chi phí vận hành (Project Capital vs. Expense Costs) dựa trên dữ liệu từ `cost_benefit_analysis` trong SharedMemory. "
-            "Bảng tính này ước lượng chi phí vốn và chi phí vận hành (bao gồm phần cứng, phần mềm, dịch vụ, di chuyển) và theo dõi so với ngân sách. "
-            "Lưu bảng tính dưới dạng `.xlsx` trong thư mục `output/1_planning` với tên `Project_Capital_vs_Expense_Costs.xlsx`. "
-            "Lưu kết quả vào SharedMemory với khóa `capital_vs_expense`."
+            f"Dưới đây là thông tin cost_benefit_analysis:\n\n"
+            f"{global_context['cost_benefit_analysis']}\n\n"
+            "Hãy sử dụng dữ liệu trên để tạo bảng tính 'Chi phí vốn so với chi phí vận hành' (Project Capital vs. Expense Costs) với nội dung cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: phần cứng, phần mềm, dịch vụ, di chuyển, tổng hợp chi phí vốn và vận hành."
         ),
         agent=planning_agent,
         expected_output=(
-            "Bảng tính `Project_Capital_vs_Expense_Costs.xlsx` chứa ước lượng chi phí vốn và vận hành, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `capital_vs_expense`."
+            "Một bảng tính hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'cost_benefit_analysis'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file XLSX."
         ),
-        callback=lambda output: create_xlsx(
-            [
-                ["Category", "Capital Cost", "Expense Cost", "Total"],
-                ["Hardware", "TBD", "TBD", "=B2+C2"],
-                ["Software", "TBD", "TBD", "=B3+C3"],
-                ["Services", "TBD", "TBD", "=B4+C4"],
-                ["Migration", "TBD", "TBD", "=B5+C5"],
-                ["Total", "=SUM(B2:B5)", "=SUM(C2:C5)", "=SUM(D2:D5)"]
-            ],
-            f"{output_base_dir}/1_planning/Project_Capital_vs_Expense_Costs.xlsx"
-        ) and shared_memory.save("capital_vs_expense", output)
-    )
+        context=[{
+            "description": "Thông tin mô tả cost_benefit_analysis từ người dùng",
+            "expected_output": "Tóm tắt các hạng mục chi phí vốn và vận hành...",
+            "input": global_context["cost_benefit_analysis"]
+        }],
+        callback=make_docx_xlsx_callback(
+            "Chi phí vốn vs vận hành",
+            f"{output_base_dir}/1_planning/Project_Capital_vs_Expense_Costs.docx",
+            f"{output_base_dir}/1_planning/Project_Capital_vs_Expense_Costs.xlsx",
+            shared_memory,
+            "capital_vs_expense"
+        )
+    ))
 
-    # Tác vụ tạo Configuration Management Plan
-    config_management_plan_task = Task(
+    # Configuration Management Plan
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Kế hoạch quản lý cấu hình (Configuration Management Plan) dựa trên dữ liệu từ `project_charter` và `statement_of_work` trong SharedMemory. "
-            "Tài liệu này trình bày cách quản lý cấu hình (CM) trong dự án, công cụ sử dụng, quy trình áp dụng và cách đạt được thành công. "
-            "Nội dung phải bao gồm: đối tượng người dùng, tổ chức quản lý cấu hình, hoạt động & trách nhiệm, hội đồng kiểm soát cấu hình (CCB), kiểm toán cấu hình, phê duyệt kế hoạch. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Configuration_Management_Plan.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `config_management_plan`."
+            f"Dưới đây là thông tin project_charter:\n\n"
+            f"{global_context['project_charter']}\n\n"
+            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"{global_context['statement_of_work']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch quản lý cấu hình' (Configuration Management Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: đối tượng người dùng, tổ chức quản lý cấu hình, hoạt động & trách nhiệm, hội đồng kiểm soát cấu hình (CCB), kiểm toán cấu hình, phê duyệt kế hoạch."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Configuration_Management_Plan.docx` chứa kế hoạch quản lý cấu hình, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `config_management_plan`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter' và 'statement_of_work'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[
+            {
+                "description": "Thông tin mô tả project_charter từ người dùng",
+                "expected_output": "Tóm tắt thông tin về tổ chức, vai trò, trách nhiệm...",
+                "input": global_context["project_charter"]
+            },
+            {
+                "description": "Thông tin mô tả statement_of_work từ người dùng",
+                "expected_output": "Tóm tắt thông tin về phạm vi, hoạt động, kiểm soát...",
+                "input": global_context["statement_of_work"]
+            }
+        ],
+        callback=make_docx_callback(
             "Kế hoạch quản lý cấu hình",
-            [
-                "1. Đối tượng người dùng: Các bên sử dụng kế hoạch (lấy từ project_charter).",
-                "2. Tổ chức quản lý: Cơ cấu tổ chức quản lý cấu hình.",
-                "3. Hoạt động & trách nhiệm: Các hoạt động và vai trò liên quan.",
-                "4. Hội đồng kiểm soát cấu hình: Vai trò và quy trình của CCB.",
-                "5. Kiểm toán cấu hình: Quy trình kiểm tra cấu hình.",
-                shared_memory.load("project_charter") or "Không có dữ liệu",
-                shared_memory.load("statement_of_work") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Configuration_Management_Plan.docx"
-        ) and shared_memory.save("config_management_plan", output)
-    )
+            f"{output_base_dir}/1_planning/Configuration_Management_Plan.docx",
+            shared_memory,
+            "config_management_plan"
+        )
+    ))
 
-    # Tác vụ tạo Risk Information Data Collection Form
-    risk_data_collection_task = Task(
+    # Risk Information Data Collection Form
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Mẫu thu thập thông tin rủi ro (Risk Information Data Collection Form) dựa trên dữ liệu từ `project_charter` trong SharedMemory. "
-            "Tài liệu này thu thập thông tin chi tiết về rủi ro từ nhiều nguồn trong quá trình dự án để phân tích và đưa vào Kế hoạch phân tích rủi ro. "
-            "Nội dung phải bao gồm: nhận dạng rủi ro, phân tích nguyên nhân gốc, đánh giá rủi ro, xem xét và phản hồi. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Risk_Information_Data_Collection_Form.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `risk_data_collection`."
+            f"Dưới đây là thông tin project_charter:\n\n"
+            f"{global_context['project_charter']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Mẫu thu thập thông tin rủi ro' (Risk Information Data Collection Form) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: nhận dạng rủi ro, phân tích nguyên nhân gốc, đánh giá rủi ro, xem xét và phản hồi."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Risk_Information_Data_Collection_Form.docx` chứa mẫu thu thập thông tin rủi ro, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `risk_data_collection`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả project_charter từ người dùng",
+            "expected_output": "Tóm tắt thông tin về rủi ro, nguyên nhân, đánh giá...",
+            "input": global_context["project_charter"]
+        }],
+        callback=make_docx_callback(
             "Mẫu thu thập thông tin rủi ro",
-            [
-                "1. Nhận dạng rủi ro: Danh sách các rủi ro tiềm năng (lấy từ project_charter).",
-                "2. Phân tích nguyên nhân gốc: Nguyên nhân của từng rủi ro.",
-                "3. Đánh giá rủi ro: Mức độ nghiêm trọng và xác suất xảy ra.",
-                "4. Xem xét và phản hồi: Các biện pháp giảm thiểu và phản hồi.",
-                shared_memory.load("project_charter") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Risk_Information_Data_Collection_Form.docx"
-        ) and shared_memory.save("risk_data_collection", output)
-    )
+            f"{output_base_dir}/1_planning/Risk_Information_Data_Collection_Form.docx",
+            shared_memory,
+            "risk_data_collection"
+        )
+    ))
 
-    # Tác vụ tạo Risk Analysis Plan
-    risk_analysis_plan_task = Task(
+    # Risk Analysis Plan
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Kế hoạch phân tích rủi ro (Risk Analysis Plan) dựa trên dữ liệu từ `risk_data_collection` trong SharedMemory. "
-            "Tài liệu này cung cấp phương tiện để ghi lại phân tích rủi ro dự án và theo dõi những rủi ro có thể ảnh hưởng đến thành công hoặc tiến độ. "
-            "Nội dung phải bao gồm: mục đích dự án, thông tin dự án, bảng phân tích rủi ro (điểm ưu tiên, chiến lược giảm thiểu, kế hoạch dự phòng). "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Risk_Analysis_Plan.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `risk_analysis_plan`."
+            f"Dưới đây là thông tin risk_data_collection:\n\n"
+            f"{global_context['risk_data_collection']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch phân tích rủi ro' (Risk Analysis Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục đích dự án, thông tin dự án, bảng phân tích rủi ro (điểm ưu tiên, chiến lược giảm thiểu, kế hoạch dự phòng)."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Risk_Analysis_Plan.docx` chứa kế hoạch phân tích rủi ro, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `risk_analysis_plan`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'risk_data_collection'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả risk_data_collection từ người dùng",
+            "expected_output": "Tóm tắt thông tin về rủi ro, phân tích, chiến lược...",
+            "input": global_context["risk_data_collection"]
+        }],
+        callback=make_docx_callback(
             "Kế hoạch phân tích rủi ro",
-            [
-                "1. Mục đích dự án: Tổng quan về dự án và rủi ro (lấy từ risk_data_collection).",
-                "2. Thông tin dự án: Bối cảnh và phạm vi rủi ro.",
-                "3. Bảng phân tích rủi ro: Điểm ưu tiên, chiến lược giảm thiểu, kế hoạch dự phòng.",
-                shared_memory.load("risk_data_collection") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Risk_Analysis_Plan.docx"
-        ) and shared_memory.save("risk_analysis_plan", output)
-    )
+            f"{output_base_dir}/1_planning/Risk_Analysis_Plan.docx",
+            shared_memory,
+            "risk_analysis_plan"
+        )
+    ))
 
-    # Tác vụ tạo Procurement Plan
-    procurement_plan_task = Task(
+    # Procurement Plan
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Kế hoạch mua sắm (Procurement Plan) dựa trên dữ liệu từ `project_resource_plan` và `statement_of_work` trong SharedMemory. "
-            "Tài liệu này xác định quy trình và thông tin để mua sắm phần cứng, phần mềm, nhà cung cấp hoặc các mục cần thiết khác. "
-            "Nội dung phải bao gồm: giới thiệu, mục tiêu, thông tin mua sắm (người phụ trách, vật phẩm, rủi ro, thời gian), chiến lược mua sắm (chiến lược giá, phương pháp cạnh tranh, giới hạn ngân sách). "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Procurement_Plan.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `procurement_plan`."
+            f"Dưới đây là thông tin project_resource_plan:\n\n"
+            f"{global_context['project_resource_plan']}\n\n"
+            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"{global_context['statement_of_work']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch mua sắm' (Procurement Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: giới thiệu, mục tiêu, thông tin mua sắm (người phụ trách, vật phẩm, rủi ro, thời gian), chiến lược mua sắm (chiến lược giá, phương pháp cạnh tranh, giới hạn ngân sách)."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Procurement_Plan.docx` chứa kế hoạch mua sắm, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `procurement_plan`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_resource_plan' và 'statement_of_work'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[
+            {
+                "description": "Thông tin mô tả project_resource_plan từ người dùng",
+                "expected_output": "Tóm tắt thông tin về nguồn lực, vật tư, nhân sự...",
+                "input": global_context["project_resource_plan"]
+            },
+            {
+                "description": "Thông tin mô tả statement_of_work từ người dùng",
+                "expected_output": "Tóm tắt thông tin về phạm vi, mục tiêu, tiến độ...",
+                "input": global_context["statement_of_work"]
+            }
+        ],
+        callback=make_docx_callback(
             "Kế hoạch mua sắm",
-            [
-                "1. Giới thiệu: Mục đích và phạm vi mua sắm (lấy từ statement_of_work).",
-                "2. Thông tin mua sắm: Người phụ trách, vật phẩm, rủi ro, thời gian (lấy từ project_resource_plan).",
-                "3. Chiến lược mua sắm: Chiến lược giá, phương pháp cạnh tranh, giới hạn ngân sách.",
-                shared_memory.load("project_resource_plan") or "Không có dữ liệu",
-                shared_memory.load("statement_of_work") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Procurement_Plan.docx"
-        ) and shared_memory.save("procurement_plan", output)
-    )
+            f"{output_base_dir}/1_planning/Procurement_Plan.docx",
+            shared_memory,
+            "procurement_plan"
+        )
+    ))
 
-    # Tác vụ tạo Project Organization Chart
-    project_org_chart_task = Task(
+    # Project Organization Chart
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Sơ đồ tổ chức dự án (Project Organization Chart) dựa trên dữ liệu từ `project_team_definition` trong SharedMemory. "
-            "Sơ đồ tổ chức thể hiện các 'người ra quyết định' chính trong dự án, bao gồm PMO, nhà tài trợ, các bên liên quan, phân tích nghiệp vụ, tổ chức hỗ trợ như hạ tầng, thiết kế, QA. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Project_Organization_Chart.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `project_org_chart`."
+            f"Dưới đây là thông tin project_team_definition:\n\n"
+            f"{global_context['project_team_definition']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Sơ đồ tổ chức dự án' (Project Organization Chart) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: sơ đồ tổ chức, người ra quyết định, tổ chức hỗ trợ."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Project_Organization_Chart.docx` chứa sơ đồ tổ chức dự án, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `project_org_chart`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_team_definition'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả project_team_definition từ người dùng",
+            "expected_output": "Tóm tắt thông tin về vai trò, tổ chức, hỗ trợ...",
+            "input": global_context["project_team_definition"]
+        }],
+        callback=make_docx_callback(
             "Sơ đồ tổ chức dự án",
-            [
-                "1. Sơ đồ tổ chức: Hiển thị các vai trò và mối quan hệ trong dự án (lấy từ project_team_definition).",
-                "2. Người ra quyết định: PMO, nhà tài trợ, các bên liên quan chính.",
-                "3. Tổ chức hỗ trợ: Hạ tầng, thiết kế, QA, v.v.",
-                shared_memory.load("project_team_definition") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Project_Organization_Chart.docx"
-        ) and shared_memory.save("project_org_chart", output)
-    )
+            f"{output_base_dir}/1_planning/Project_Organization_Chart.docx",
+            shared_memory,
+            "project_org_chart"
+        )
+    ))
 
-    # Tác vụ tạo Roles and Responsibilities Matrix
-    roles_responsibilities_task = Task(
+    # Roles and Responsibilities Matrix
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Ma trận vai trò và trách nhiệm (Roles and Responsibilities Matrix) dựa trên dữ liệu từ `project_team_definition` và `statement_of_work` trong SharedMemory. "
-            "Tài liệu hiển thị các hoạt động chính của dự án và chi tiết trách nhiệm của từng cá nhân hoặc vai trò trong từng phòng ban chức năng, sử dụng mô hình RACI. "
-            "Nội dung phải bao gồm: thiết lập ma trận trách nhiệm, mô tả mẫu vai trò và trách nhiệm, ma trận chuẩn và ma trận theo mô hình RACI. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Roles_and_Responsibilities_Matrix.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `roles_responsibilities_matrix`."
+            f"Dưới đây là thông tin project_team_definition:\n\n"
+            f"{global_context['project_team_definition']}\n\n"
+            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"{global_context['statement_of_work']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Ma trận vai trò và trách nhiệm' (Roles and Responsibilities Matrix) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: thiết lập ma trận trách nhiệm, mô tả mẫu vai trò và trách nhiệm, ma trận chuẩn và ma trận theo mô hình RACI."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Roles_and_Responsibilities_Matrix.docx` chứa ma trận vai trò và trách nhiệm, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `roles_responsibilities_matrix`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_team_definition' và 'statement_of_work'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[
+            {
+                "description": "Thông tin mô tả project_team_definition từ người dùng",
+                "expected_output": "Tóm tắt thông tin về vai trò, trách nhiệm...",
+                "input": global_context["project_team_definition"]
+            },
+            {
+                "description": "Thông tin mô tả statement_of_work từ người dùng",
+                "expected_output": "Tóm tắt thông tin về hoạt động, trách nhiệm...",
+                "input": global_context["statement_of_work"]
+            }
+        ],
+        callback=make_docx_callback(
             "Ma trận vai trò và trách nhiệm",
-            [
-                "1. Thiết lập ma trận: Tổng quan về các hoạt động và vai trò (lấy từ project_team_definition).",
-                "2. Mô tả vai trò: Chi tiết trách nhiệm của từng vai trò (lấy từ statement_of_work).",
-                "3. Ma trận RACI: Phân bổ Responsible, Accountable, Consulted, Informed.",
-                shared_memory.load("project_team_definition") or "Không có dữ liệu",
-                shared_memory.load("statement_of_work") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Roles_and_Responsibilities_Matrix.docx"
-        ) and shared_memory.save("roles_responsibilities_matrix", output)
-    )
+            f"{output_base_dir}/1_planning/Roles_and_Responsibilities_Matrix.docx",
+            shared_memory,
+            "roles_responsibilities_matrix"
+        )
+    ))
 
-    # Tác vụ tạo Required Approvals Matrix
-    required_approvals_task = Task(
+    # Required Approvals Matrix
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Ma trận phê duyệt bắt buộc (Required Approvals Matrix) dựa trên dữ liệu từ `project_approval` trong SharedMemory. "
-            "Ma trận này thể hiện các hoạt động chính của dự án (chức năng, nhiệm vụ, tài liệu hoặc giai đoạn) và người chịu trách nhiệm phê duyệt chúng, bao gồm các tài liệu như Business Case, Feasibility Study, Cost/Benefit Analysis, Project Charter, Project Approval Document, Functional & Technical Requirements, Requirements Traceability Matrix, Project Plan, Training Plan, thiết kế, hướng dẫn sử dụng, kế hoạch kiểm thử, tài liệu chuyển giao sản phẩm, phân tích phản hồi, yêu cầu thay đổi. "
-            "Nội dung phải bao gồm: mục đích của dự án, mô tả mẫu vai trò và trách nhiệm, ma trận phê duyệt. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Required_Approvals_Matrix.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `required_approvals_matrix`."
+            f"Dưới đây là thông tin project_approval:\n\n"
+            f"{global_context['project_approval']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Ma trận phê duyệt bắt buộc' (Required Approvals Matrix) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục đích của dự án, mô tả mẫu vai trò và trách nhiệm, ma trận phê duyệt."
         ),
         agent=project_manager_agent,
         expected_output=(
-            "Tài liệu `Required_Approvals_Matrix.docx` chứa ma trận phê duyệt bắt buộc, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `required_approvals_matrix`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_approval'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả project_approval từ người dùng",
+            "expected_output": "Tóm tắt thông tin về phê duyệt, vai trò, trách nhiệm...",
+            "input": global_context["project_approval"]
+        }],
+        callback=make_docx_callback(
             "Ma trận phê duyệt bắt buộc",
-            [
-                "1. Mục đích dự án: Tổng quan về các hoạt động cần phê duyệt (lấy từ project_approval).",
-                "2. Mô tả vai trò: Người chịu trách nhiệm phê duyệt cho từng tài liệu hoặc giai đoạn.",
-                "3. Ma trận phê duyệt: Danh sách các tài liệu và người phê duyệt (Business Case, Feasibility Study, Project Charter, v.v.).",
-                shared_memory.load("project_approval") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Required_Approvals_Matrix.docx"
-        ) and shared_memory.save("required_approvals_matrix", output)
-    )
+            f"{output_base_dir}/1_planning/Required_Approvals_Matrix.docx",
+            shared_memory,
+            "required_approvals_matrix"
+        )
+    ))
 
-    # Tác vụ tạo Activity Worksheet in Work Breakdown Structure Dictionary Form
-    activity_worksheet_task = Task(
+    # Activity Worksheet in WBS Dictionary Form
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Bảng công việc theo dạng từ điển WBS (Activity Worksheet in Work Breakdown Structure Dictionary Form) dựa trên dữ liệu từ `statement_of_work` trong SharedMemory. "
-            "Tài liệu này cho phép chuyên gia (SME) định nghĩa chi tiết công việc và nhiệm vụ trong WBS, bao gồm: số nhiệm vụ, mô tả, hoạt động cụ thể, mục tiêu, tiêu chí chấp nhận, giả định, kỹ năng, tài nguyên, vật tư, ước lượng thời gian, chi phí, quan hệ phụ thuộc trước/sau, phê duyệt. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Activity_Worksheet_WBS_Dictionary.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `activity_worksheet`."
+            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"{global_context['statement_of_work']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Bảng công việc theo dạng từ điển WBS' (Activity Worksheet in Work Breakdown Structure Dictionary Form) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: số nhiệm vụ, mô tả, hoạt động cụ thể, mục tiêu, tiêu chí chấp nhận, giả định, kỹ năng, tài nguyên, vật tư, ước lượng thời gian, chi phí, quan hệ phụ thuộc trước/sau, phê duyệt."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Activity_Worksheet_WBS_Dictionary.docx` chứa bảng công việc WBS, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `activity_worksheet`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'statement_of_work'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả statement_of_work từ người dùng",
+            "expected_output": "Tóm tắt thông tin về nhiệm vụ, mục tiêu, kỹ năng...",
+            "input": global_context["statement_of_work"]
+        }],
+        callback=make_docx_callback(
             "Bảng công việc theo dạng từ điển WBS",
-            [
-                "1. Số nhiệm vụ: Danh sách các nhiệm vụ trong WBS (lấy từ statement_of_work).",
-                "2. Mô tả: Chi tiết công việc và mục tiêu.",
-                "3. Tiêu chí chấp nhận: Điều kiện để hoàn thành nhiệm vụ.",
-                "4. Tài nguyên và kỹ năng: Yêu cầu về nhân sự, vật tư, thời gian, chi phí.",
-                "5. Quan hệ phụ thuộc: Các nhiệm vụ trước/sau.",
-                shared_memory.load("statement_of_work") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Activity_Worksheet_WBS_Dictionary.docx"
-        ) and shared_memory.save("activity_worksheet", output)
-    )
+            f"{output_base_dir}/1_planning/Activity_Worksheet_WBS_Dictionary.docx",
+            shared_memory,
+            "activity_worksheet"
+        )
+    ))
 
-    # Tác vụ tạo Work Breakdown Structure Resource Planning Template
-    wbs_resource_planning_task = Task(
+    # WBS Resource Planning Template
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Mẫu lập kế hoạch nguồn lực WBS (Work Breakdown Structure Resource Planning Template) dựa trên dữ liệu từ `project_resource_plan` và `activity_worksheet` trong SharedMemory. "
-            "Mẫu này ước lượng thời gian công việc và kỹ năng cần thiết, bao gồm quản lý dự án, BA, kiến trúc sư, phát triển phần mềm/giao diện/cơ sở dữ liệu, kiểm thử. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `WBS_Resource_Planning_Template.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `wbs_resource_planning`."
+            f"Dưới đây là thông tin project_resource_plan:\n\n"
+            f"{global_context['project_resource_plan']}\n\n"
+            f"Dưới đây là thông tin activity_worksheet:\n\n"
+            f"{global_context['activity_worksheet']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Mẫu lập kế hoạch nguồn lực WBS' (Work Breakdown Structure Resource Planning Template) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: kỹ năng cần thiết, ước lượng thời gian, phân bổ tài nguyên."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `WBS_Resource_Planning_Template.docx` chứa mẫu lập kế hoạch nguồn lực WBS, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `wbs_resource_planning`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_resource_plan' và 'activity_worksheet'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[
+            {
+                "description": "Thông tin mô tả project_resource_plan từ người dùng",
+                "expected_output": "Tóm tắt thông tin về nguồn lực, kỹ năng...",
+                "input": global_context["project_resource_plan"]
+            },
+            {
+                "description": "Thông tin mô tả activity_worksheet từ người dùng",
+                "expected_output": "Tóm tắt thông tin về nhiệm vụ, thời gian...",
+                "input": global_context["activity_worksheet"]
+            }
+        ],
+        callback=make_docx_callback(
             "Mẫu lập kế hoạch nguồn lực WBS",
-            [
-                "1. Kỹ năng cần thiết: Quản lý dự án, BA, phát triển, kiểm thử, v.v. (lấy từ project_resource_plan).",
-                "2. Ước lượng thời gian: Thời gian cần thiết cho từng nhiệm vụ (lấy từ activity_worksheet).",
-                "3. Phân bổ tài nguyên: Cách phân bổ nhân sự và vật tư.",
-                shared_memory.load("project_resource_plan") or "Không có dữ liệu",
-                shared_memory.load("activity_worksheet") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/WBS_Resource_Planning_Template.docx"
-        ) and shared_memory.save("wbs_resource_planning", output)
-    )
+            f"{output_base_dir}/1_planning/WBS_Resource_Planning_Template.docx",
+            shared_memory,
+            "wbs_resource_planning"
+        )
+    ))
 
-    # Tác vụ tạo Work Breakdown Structure (WBS)
-    wbs_task = Task(
+    # Work Breakdown Structure (WBS)
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Cấu trúc phân chia công việc (Work Breakdown Structure - WBS) dựa trên dữ liệu từ `activity_worksheet` trong SharedMemory. "
-            "WBS chia nhỏ dự án thành các giai đoạn, sản phẩm và công việc để hỗ trợ lập chi phí, lịch trình và kiểm soát. "
-            "Nội dung phải bao gồm: tên dự án, bộ phận, mã công việc, mô tả, người/nhóm phụ trách, thời hạn hoàn thành. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Work_Breakdown_Structure.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `wbs`."
+            f"Dưới đây là thông tin activity_worksheet:\n\n"
+            f"{global_context['activity_worksheet']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Cấu trúc phân chia công việc' (Work Breakdown Structure - WBS) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: tên dự án, bộ phận, mã công việc, mô tả, người/nhóm phụ trách, thời hạn hoàn thành."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Work_Breakdown_Structure.docx` chứa cấu trúc phân chia công việc, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `wbs`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'activity_worksheet'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả activity_worksheet từ người dùng",
+            "expected_output": "Tóm tắt thông tin về công việc, mã, người phụ trách...",
+            "input": global_context["activity_worksheet"]
+        }],
+        callback=make_docx_callback(
             "Cấu trúc phân chia công việc",
-            [
-                "1. Tên dự án: Tên và bối cảnh dự án (lấy từ activity_worksheet).",
-                "2. Mã công việc: Danh sách mã và mô tả công việc.",
-                "3. Người phụ trách: Nhóm hoặc cá nhân chịu trách nhiệm.",
-                "4. Thời hạn: Thời gian hoàn thành từng công việc.",
-                shared_memory.load("activity_worksheet") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Work_Breakdown_Structure.docx"
-        ) and shared_memory.save("wbs", output)
-    )
+            f"{output_base_dir}/1_planning/Work_Breakdown_Structure.docx",
+            shared_memory,
+            "wbs"
+        )
+    ))
 
-    # Tác vụ tạo COBIT Checklist and Review
-    cobit_checklist_task = Task(
+    # COBIT Checklist and Review
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Danh sách kiểm tra và đánh giá COBIT (COBIT Checklist and Review) dựa trên dữ liệu từ `project_charter` trong SharedMemory. "
-            "COBIT là bộ tiêu chuẩn kiểm soát CNTT theo Luật Sarbanes-Oxley, cung cấp mô hình quản trị CNTT chuẩn hóa. "
-            "Nội dung phải bao gồm: mục tiêu kiểm soát COBIT, tóm tắt thành phần và quy trình COBIT, các nhóm chính (Lập kế hoạch, Triển khai, Hỗ trợ, Giám sát). "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `COBIT_Checklist_and_Review.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `cobit_checklist`."
+            f"Dưới đây là thông tin project_charter:\n\n"
+            f"{global_context['project_charter']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách kiểm tra và đánh giá COBIT' (COBIT Checklist and Review) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục tiêu kiểm soát COBIT, tóm tắt thành phần và quy trình COBIT, các nhóm chính (Lập kế hoạch, Triển khai, Hỗ trợ, Giám sát)."
         ),
         agent=researcher_agent,
         expected_output=(
-            "Tài liệu `COBIT_Checklist_and_Review.docx` chứa danh sách kiểm tra COBIT, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `cobit_checklist`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả project_charter từ người dùng",
+            "expected_output": "Tóm tắt thông tin về kiểm soát, quy trình, nhóm COBIT...",
+            "input": global_context["project_charter"]
+        }],
+        callback=make_docx_callback(
             "Danh sách kiểm tra và đánh giá COBIT",
-            [
-                "1. Mục tiêu kiểm soát: Các mục tiêu COBIT liên quan đến dự án (lấy từ project_charter).",
-                "2. Thành phần COBIT: Tóm tắt các quy trình COBIT.",
-                "3. Nhóm chính: Lập kế hoạch, Triển khai, Hỗ trợ, Giám sát.",
-                shared_memory.load("project_charter") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/COBIT_Checklist_and_Review.docx"
-        ) and shared_memory.save("cobit_checklist", output)
-    )
+            f"{output_base_dir}/1_planning/COBIT_Checklist_and_Review.docx",
+            shared_memory,
+            "cobit_checklist"
+        )
+    ))
 
-    # Tác vụ tạo Request For Information
-    rfi_task = Task(
+    # Request For Information
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Yêu cầu thông tin (Request For Information - RFI) dựa trên dữ liệu từ `statement_of_work` trong SharedMemory. "
-            "Tài liệu này yêu cầu thông tin từ nhà cung cấp về sản phẩm/dịch vụ nhằm giúp đưa ra quyết định tiếp theo. "
-            "Nội dung phải bao gồm: mục đích, quy trình RFI, hồ sơ doanh nghiệp, tính năng kỹ thuật sản phẩm, thông tin định giá và chi phí vòng đời. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Request_For_Information.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `rfi`."
+            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"{global_context['statement_of_work']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Yêu cầu thông tin' (Request For Information - RFI) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục đích, quy trình RFI, hồ sơ doanh nghiệp, tính năng kỹ thuật sản phẩm, thông tin định giá và chi phí vòng đời."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Request_For_Information.docx` chứa yêu cầu thông tin, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `rfi`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'statement_of_work'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả statement_of_work từ người dùng",
+            "expected_output": "Tóm tắt thông tin về mục tiêu, quy trình, tính năng...",
+            "input": global_context["statement_of_work"]
+        }],
+        callback=make_docx_callback(
             "Yêu cầu thông tin",
-            [
-                "1. Mục đích: Mục tiêu của RFI (lấy từ statement_of_work).",
-                "2. Quy trình RFI: Các bước để thu thập thông tin từ nhà cung cấp.",
-                "3. Hồ sơ doanh nghiệp: Yêu cầu thông tin về nhà cung cấp.",
-                "4. Tính năng kỹ thuật: Yêu cầu chi tiết về sản phẩm/dịch vụ.",
-                "5. Định giá: Thông tin chi phí và chi phí vòng đời.",
-                shared_memory.load("statement_of_work") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Request_For_Information.docx"
-        ) and shared_memory.save("rfi", output)
-    )
+            f"{output_base_dir}/1_planning/Request_For_Information.docx",
+            shared_memory,
+            "rfi"
+        )
+    ))
 
-    # Tác vụ tạo Root Cause Analysis
-    root_cause_analysis_task = Task(
+    # Root Cause Analysis
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Phân tích nguyên nhân gốc rễ (Root Cause Analysis) dựa trên dữ liệu từ `risk_data_collection` trong SharedMemory. "
-            "Tài liệu này xác định nguyên nhân gốc rễ của sự cố và khuyến nghị cách giải quyết. "
-            "Nội dung phải bao gồm: tóm tắt, thời gian xảy ra, phòng ban, ứng dụng bị ảnh hưởng, chuỗi sự kiện, hành động đề xuất. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Root_Cause_Analysis.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `root_cause_analysis`."
+            f"Dưới đây là thông tin risk_data_collection:\n\n"
+            f"{global_context['risk_data_collection']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Phân tích nguyên nhân gốc rễ' (Root Cause Analysis) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: tóm tắt, thời gian xảy ra, phòng ban, ứng dụng bị ảnh hưởng, chuỗi sự kiện, hành động đề xuất."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Root_Cause_Analysis.docx` chứa phân tích nguyên nhân gốc rễ, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `root_cause_analysis`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'risk_data_collection'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả risk_data_collection từ người dùng",
+            "expected_output": "Tóm tắt thông tin về sự cố, nguyên nhân, giải pháp...",
+            "input": global_context["risk_data_collection"]
+        }],
+        callback=make_docx_callback(
             "Phân tích nguyên nhân gốc rễ",
-            [
-                "1. Tóm tắt: Tổng quan về sự cố (lấy từ risk_data_collection).",
-                "2. Thời gian xảy ra: Thời điểm xảy ra sự cố.",
-                "3. Phòng ban và ứng dụng: Các phòng ban và hệ thống bị ảnh hưởng.",
-                "4. Chuỗi sự kiện: Diễn biến dẫn đến sự cố.",
-                "5. Hành động đề xuất: Giải pháp để giải quyết và ngăn chặn.",
-                shared_memory.load("risk_data_collection") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Root_Cause_Analysis.docx"
-        ) and shared_memory.save("root_cause_analysis", output)
-    )
+            f"{output_base_dir}/1_planning/Root_Cause_Analysis.docx",
+            shared_memory,
+            "root_cause_analysis"
+        )
+    ))
 
-    # Tác vụ tạo Project Plan
-    project_plan_task = Task(
+    # Project Plan
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Kế hoạch dự án (Project Plan) dựa trên dữ liệu từ `project_charter`, `statement_of_work`, và `wbs` trong SharedMemory. "
-            "Tài liệu này lập kế hoạch thực thi và kiểm soát dự án, gồm sản phẩm chính, mốc thời gian, hoạt động, nguồn lực, áp dụng theo các giai đoạn SDLC (Khởi tạo, Lập kế hoạch, Xác định yêu cầu, Thiết kế hệ thống, Phát triển, Kiểm thử, Triển khai, Kết thúc). "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `Project_Plan.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `project_plan`."
+            f"Dưới đây là thông tin project_charter:\n\n"
+            f"{global_context['project_charter']}\n\n"
+            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"{global_context['statement_of_work']}\n\n"
+            f"Dưới đây là thông tin wbs:\n\n"
+            f"{global_context['wbs']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch dự án' (Project Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: sản phẩm chính, mốc thời gian, hoạt động, nguồn lực, áp dụng theo các giai đoạn SDLC."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `Project_Plan.docx` chứa kế hoạch dự án, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `project_plan`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter', 'statement_of_work', và 'wbs'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[
+            {
+                "description": "Thông tin mô tả project_charter từ người dùng",
+                "expected_output": "Tóm tắt thông tin về mục tiêu, nguồn lực...",
+                "input": global_context["project_charter"]
+            },
+            {
+                "description": "Thông tin mô tả statement_of_work từ người dùng",
+                "expected_output": "Tóm tắt thông tin về sản phẩm, hoạt động...",
+                "input": global_context["statement_of_work"]
+            },
+            {
+                "description": "Thông tin mô tả wbs từ người dùng",
+                "expected_output": "Tóm tắt thông tin về công việc, lịch trình...",
+                "input": global_context["wbs"]
+            }
+        ],
+        callback=make_docx_callback(
             "Kế hoạch dự án",
-            [
-                "1. Sản phẩm chính: Các sản phẩm đầu ra của dự án (lấy từ statement_of_work).",
-                "2. Mốc thời gian: Lịch trình theo giai đoạn SDLC (lấy từ wbs).",
-                "3. Hoạt động: Danh sách các hoạt động chính (lấy từ wbs).",
-                "4. Nguồn lực: Phân bổ tài nguyên (lấy từ project_charter).",
-                shared_memory.load("project_charter") or "Không có dữ liệu",
-                shared_memory.load("statement_of_work") or "Không có dữ liệu",
-                shared_memory.load("wbs") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/Project_Plan.docx"
-        ) and shared_memory.save("project_plan", output)
-    )
+            f"{output_base_dir}/1_planning/Project_Plan.docx",
+            shared_memory,
+            "project_plan"
+        )
+    ))
 
-    # Tác vụ tạo List of Opportunities Summary
-    opportunities_summary_task = Task(
+    # List of Opportunities Summary
+    tasks.append(Task(
         description=(
-            "Sử dụng công cụ `create_project_plan_document` để tạo tài liệu Tổng hợp danh sách cơ hội (List of Opportunities Summary) dựa trên dữ liệu từ `business_case` trong SharedMemory. "
-            "Tài liệu này tổng hợp các cơ hội dự án, bao gồm: mô tả, mức độ ưu tiên, ngày giao, người phụ trách, ghi chú. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/1_planning` với tên `List_of_Opportunities_Summary.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `opportunities_summary`."
+            f"Dưới đây là thông tin business_case:\n\n"
+            f"{global_context['business_case']}\n\n"
+            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Tổng hợp danh sách cơ hội' (List of Opportunities Summary) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
+            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mô tả, mức độ ưu tiên, ngày giao, người phụ trách, ghi chú."
         ),
         agent=planning_agent,
         expected_output=(
-            "Tài liệu `List_of_Opportunities_Summary.docx` chứa tổng hợp danh sách cơ hội, "
-            "được lưu trong `output/1_planning` và SharedMemory với khóa `opportunities_summary`."
+            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'business_case'. "
+            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
         ),
-        callback=lambda output: create_docx(
+        context=[{
+            "description": "Thông tin mô tả business_case từ người dùng",
+            "expected_output": "Tóm tắt thông tin về cơ hội, mức độ ưu tiên, người phụ trách...",
+            "input": global_context["business_case"]
+        }],
+        callback=make_docx_callback(
             "Tổng hợp danh sách cơ hội",
-            [
-                "1. Mô tả cơ hội: Danh sách các cơ hội dự án (lấy từ business_case).",
-                "2. Mức độ ưu tiên: Cao, trung bình, thấp.",
-                "3. Ngày giao: Thời hạn thực hiện cơ hội.",
-                "4. Người phụ trách: Cá nhân hoặc nhóm chịu trách nhiệm.",
-                "5. Ghi chú: Thông tin bổ sung hoặc lưu ý.",
-                shared_memory.load("business_case") or "Không có dữ liệu"
-            ],
-            f"{output_base_dir}/1_planning/List_of_Opportunities_Summary.docx"
-        ) and shared_memory.save("opportunities_summary", output)
-    )
-
-    tasks.extend([
-        pmo_checklist_task,
-        statement_of_work_task,
-        project_approval_task,
-        cost_estimating_worksheet_task,
-        development_estimating_worksheet_task,
-        capital_vs_expense_task,
-        config_management_plan_task,
-        risk_data_collection_task,
-        risk_analysis_plan_task,
-        procurement_plan_task,
-        project_org_chart_task,
-        roles_responsibilities_task,
-        required_approvals_task,
-        activity_worksheet_task,
-        wbs_resource_planning_task,
-        wbs_task,
-        cobit_checklist_task,
-        rfi_task,
-        root_cause_analysis_task,
-        project_plan_task,
-        opportunities_summary_task
-    ])
+            f"{output_base_dir}/1_planning/List_of_Opportunities_Summary.docx",
+            shared_memory,
+            "opportunities_summary"
+        )
+    ))
 
     return tasks
