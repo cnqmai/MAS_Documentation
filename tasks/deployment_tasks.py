@@ -34,38 +34,24 @@ def process_and_create_deployment_doc(task_output: str, output_base_dir_param: s
     logging.info(f"Đã lưu Deployment_Plan.md vào {deployment_plan_md_path}")
     shared_memory.set("phase_6_deployment", "deployment_plan_md_path", deployment_plan_md_path)
 
-    # --- 2. Tạo Production_Implementation_Plan.docx ---
-    doc = Document()
-    doc.add_heading('Kế hoạch Thực hiện Sản xuất (Production Implementation Plan)', level=1)
-    doc.add_paragraph("Tài liệu này chi tiết các bước và quy trình để triển khai hệ thống lên môi trường sản xuất.")
-
-    if deployment_plan_text:
-        doc.add_heading('Kế hoạch Triển khai (Chi tiết)', level=2)
-        doc.add_paragraph(deployment_plan_text)
-    else:
-        doc.add_paragraph("Không có nội dung kế hoạch triển khai chi tiết dạng văn bản được tạo.")
-
-    # Render Deployment Diagram và thêm vào DOCX
-    if deployment_diagram_dot_code:
+    def write_docx(file_path, content, heading):
+        """Tạo file .docx hợp lệ bằng python-docx."""
         try:
-            graph_deployment = graphviz.Source(deployment_diagram_dot_code, format='png', engine='dot')
-            deployment_img_path = os.path.join(phase_output_dir, "deployment_diagram.png")
-            graph_deployment.render(deployment_img_path.rsplit('.', 1)[0], view=False, cleanup=True)
-            doc.add_heading('Sơ đồ Triển khai (Deployment Diagram)', level=2)
-            doc.add_picture(deployment_img_path, width=Inches(6.0))
-            logging.info(f"Đã tạo và chèn Deployment Diagram vào tài liệu: {deployment_img_path}")
+            doc = Document()
+            doc.add_heading(heading, level=1)
+            doc.add_paragraph(content)
+            doc.save(file_path)
+            logging.info(f"Đã lưu file DOCX hợp lệ: {file_path}")
         except Exception as e:
-            logging.error(f"Lỗi khi tạo Deployment Diagram: {e}", exc_info=True)
-            doc.add_paragraph(f"Không thể tạo Deployment Diagram do lỗi: {e}\nMã DOT thất bại:\n```dot\n{deployment_diagram_dot_code}\n```")
-    else:
-        doc.add_paragraph("Agent không tạo ra mã DOT cho Deployment Diagram.")
+            logging.error(f"Lỗi khi lưu file DOCX {file_path}: {str(e)}")
 
-    production_impl_plan_docx_path = os.path.join(phase_output_dir, "Production_Implementation_Plan.docx")
-    doc.save(production_impl_plan_docx_path)
-    logging.info(f"Đã lưu tài liệu Production_Implementation_Plan.docx vào {production_impl_plan_docx_path}")
-    shared_memory.set("phase_6_deployment", "production_implementation_plan_docx_path", production_impl_plan_docx_path)
 
-    logging.info(f"--- Hoàn thành xử lý output cho Kế hoạch Triển khai ---")
+        production_impl_plan_docx_path = os.path.join(phase_output_dir, "Production_Implementation_Plan.docx")
+        doc.save(production_impl_plan_docx_path)
+        logging.info(f"Đã lưu tài liệu Production_Implementation_Plan.docx vào {production_impl_plan_docx_path}")
+        shared_memory.set("phase_6_deployment", "production_implementation_plan_docx_path", production_impl_plan_docx_path)
+
+        logging.info(f"--- Hoàn thành xử lý output cho Kế hoạch Triển khai ---")
 
 def process_turnover_documents(task_output: str, output_base_dir_param: str):
     logging.info(f"--- Bắt đầu xử lý output cho các tài liệu Bàn giao ---")

@@ -1,145 +1,57 @@
 import logging
-from crewai import Task, Crew, Process
-from memory.shared_memory import shared_memory
-from utils.file_writer import write_output
 import os
+from crewai import Task
+from memory.shared_memory import SharedMemory # Đảm bảo đường dẫn này đúng
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def create_initial_requirement_collection_task(input_agent, existing_context: str):
+def create_input_tasks(shared_memory: SharedMemory, input_base_dir: str, input_agent):
     """
-    Tạo một task để agent thu thập yêu cầu ban đầu từ người dùng thông qua các câu hỏi.
-    Args:
-        input_agent (Agent): Agent thu thập yêu cầu.
-        existing_context (str): Ngữ cảnh hiện tại của cuộc hội thoại, bao gồm các câu hỏi và trả lời trước đó.
-    Returns:
-        Task: Một đối tượng CrewAI Task.
+    Tạo các tác vụ cho Input Agent để thu thập và xử lý yêu cầu đầu vào thông qua hội thoại tương tác.
     """
-    return Task(
+    tasks = []
+
+    # Đảm bảo thư mục đầu vào tồn tại
+    os.makedirs(input_base_dir, exist_ok=True)
+
+    # Tác vụ thu thập yêu cầu từ người dùng/stakeholders
+    collect_requirements_task = Task(
         description=(
-            f"Bạn là một chuyên gia thu thập yêu cầu. Nhiệm vụ của bạn là đặt các câu hỏi rõ ràng, "
-            f"cụ thể cho người dùng để làm rõ các yêu cầu ban đầu cho một hệ thống phần mềm. "
-            f"Dựa trên ngữ cảnh hội thoại đã có (bao gồm các câu hỏi của bạn và trả lời của người dùng), "
-            f"hãy xác định câu hỏi tiếp theo cần hỏi để đào sâu hoặc làm rõ thêm thông tin.\n\n"
-            f"**CÁC QUY TẮC QUAN TRỌNG:**\n"
-            f"1. **Chỉ hỏi MỘT câu hỏi mỗi lần.** Đừng tóm tắt hoặc nói thêm gì khác ngoài câu hỏi.\n"
-            f"2. Nếu bạn đã có đủ thông tin (tối thiểu là các mục tiêu chính, các tính năng mong muốn, và vấn đề cần giải quyết), "
-            f"   hãy kết thúc bằng cách bắt đầu output của bạn với từ khóa 'KẾT THÚC_TÓM TẮT:' "
-            f"   theo sau là bản tóm tắt chi tiết yêu cầu hệ thống.\n"
-            f"3. Cố gắng hỏi các câu hỏi mở để khuyến khích người dùng cung cấp thêm thông tin.\n"
-            f"4. Đặt câu hỏi về Mục tiêu dự án, Phạm vi (tính năng chính/phụ), Người dùng mục tiêu, Vấn đề hiện tại cần giải quyết, "
-            f"   Các tính năng mong muốn, Công nghệ ưa thích (nếu có), Ràng buộc (ngân sách/thời gian).\n"
-            f"5. **MỚI:** Nếu người dùng trả lời không rõ ràng, quá ngắn gọn (ví dụ: 'Không có', '') hoặc không cung cấp đủ thông tin cho câu hỏi hiện tại, "
-            f"   hãy thử đặt lại câu hỏi theo một cách khác, đặt một câu hỏi mở rộng hơn, hoặc chuyển sang một khía cạnh khác của yêu cầu để tiếp tục thu thập thông tin.\n\n"
-            f"--- Ngữ cảnh hội thoại hiện tại ---\n"
-            f"{existing_context}\n\n"
-            f"Câu hỏi tiếp theo hoặc Bản tóm tắt cuối cùng của bạn:"
+            "Thực hiện quy trình thu thập yêu cầu chi tiết từ người dùng và các bên liên quan thông qua "
+            "một cuộc **hội thoại tương tác, hỏi đáp động** (dynamic, interactive questioning session). "
+            "Bạn phải sử dụng khả năng của mình để đặt **MỘT câu hỏi mỗi lần** dựa trên ngữ cảnh hội thoại đã có. "
+            "Hãy đặt câu hỏi để làm rõ các yêu cầu về **Mục tiêu dự án, Phạm vi (tính năng chính/phụ), "
+            "Người dùng mục tiêu, Vấn đề hiện tại cần giải quyết, Các tính năng mong muốn, "
+            "Công nghệ ưa thích (nếu có), và Ràng buộc (ngân sách/thời gian)**. "
+            "Nếu người dùng trả lời không rõ ràng hoặc quá ngắn gọn, hãy đặt lại câu hỏi theo cách khác "
+            "hoặc chuyển sang khía cạnh khác để tiếp tục thu thập thông tin."
+            "Sau mỗi câu hỏi, bạn sẽ chờ phản hồi từ người dùng."
+            "**QUAN TRỌNG:**"
+            "   - **Nếu bạn đã thu thập đủ thông tin quan trọng** để tạo bản tóm tắt yêu cầu hệ thống toàn diện, "
+            "     hãy tự động kết thúc phiên hỏi đáp và bắt đầu tạo bản tóm tắt cuối cùng."
+            "   - **Nếu người dùng muốn dừng lại và yêu cầu bản tóm tắt ngay lập tức**, họ sẽ gõ 'DỪNG' hoặc 'TÓM TẮT'. "
+            "     Khi nhận được tín hiệu này, bạn phải dừng việc đặt câu hỏi và ngay lập tức tạo một bản **tóm tắt yêu cầu hệ thống chi tiết và toàn diện** "
+            "     dựa trên tất cả thông tin đã thu thập được cho đến thời điểm đó."
+            "Đảm bảo bản tóm tắt này phản ánh đầy đủ ý định của các bên liên quan. "
+            f"Bạn cần **lưu toàn bộ lịch sử câu hỏi và câu trả lời** của phiên tương tác này "
+            f"vào một file nhật ký trong thư mục '{input_base_dir}' (ví dụ: `initial_requirements_conversation.md`). "
+            f"Cuối cùng, lưu bản tóm tắt yêu cầu hệ thống cuối cùng vào file `System_Request_Summary.md` "
+            f"trong thư mục '{input_base_dir}'. "
+            "Đây là một quá trình tương tác, do đó bạn cần chuẩn bị để chờ đợi và xử lý các phản hồi của người dùng."
         ),
-        expected_output="Một câu hỏi duy nhất dành cho người dùng, hoặc một bản tóm tắt yêu cầu hệ thống bắt đầu bằng 'KẾT THÚT_TÓM TẮT:'.",
         agent=input_agent,
-        verbose=False
+        expected_output=(
+            "Một bản tóm tắt yêu cầu hệ thống chi tiết và toàn diện (dưới dạng văn bản) "
+            "chứa các yêu cầu chức năng, phi chức năng, mục tiêu dự án, phạm vi, v.v. "
+            "đã được xác định thông qua phiên hỏi đáp tương tác. "
+            "Kèm theo đó là file `System_Request_Summary.md` chứa bản tóm tắt này "
+            "và file `initial_requirements_conversation.md` chứa toàn bộ lịch sử hội thoại, "
+            "cả hai đều nằm trong thư mục `{input_base_dir}`. "
+            "Dữ liệu tóm tắt cũng sẽ được lưu vào SharedMemory với khóa `system_request_summary`."
+        ),
+        callback=lambda output: shared_memory.set("phase_0_initiation", "system_request_summary", output),
+        human_input=True # Đánh dấu rằng task này yêu cầu tương tác của con người
     )
 
-# Đã thay đổi 'output_base_dir' thành 'summary_output_dir' và cập nhật cách sử dụng.
-def run_input_collection_conversation(input_agent, summary_output_dir: str):
-    """
-    Thực hiện một cuộc hội thoại tương tác với người dùng để thu thập yêu cầu.
-    Args:
-        input_agent (Agent): Agent chuyên thu thập yêu cầu.
-        summary_output_dir (str): Thư mục để lưu trữ output của bản tóm tắt yêu cầu và lịch sử hội thoại.
-                                  Thư mục này sẽ nằm cùng cấp với thư mục 'outputs'.
-    """
-    logging.info("--- Bắt đầu thu thập yêu cầu hệ thống từ người dùng (tương tác) ---")
-
-    initial_system_prompt = "Chào mừng bạn! Tôi là trợ lý thu thập yêu cầu. Hãy cho tôi biết ý tưởng ban đầu của bạn về hệ thống phần mềm mà bạn muốn xây dựng. Bạn muốn giải quyết vấn đề gì, hoặc đạt được mục tiêu gì?"
-
-    print(f"\nAGENT HỎI: {initial_system_prompt}")
-    print(" (Gợi ý: Nếu bạn muốn kết thúc và yêu cầu tóm tắt, hãy gõ 'TÓM TẮT' và nhấn Enter.)") # Gợi ý cho người dùng
-    first_user_response = input("BẠN TRẢ LỜI: ")
-
-    conversation_history = [
-        f"\nAGENT HỎI: {initial_system_prompt}\n",
-        f"BẠN TRẢ LỜI: {first_user_response}\n"
-    ]
-    current_context = f"Người dùng đã trả lời: {first_user_response}"
-    
-    # === ĐÃ THAY ĐỔI DÒNG NÀY ===
-    # Sử dụng trực tiếp summary_output_dir vì main.py đã cung cấp đường dẫn đầy đủ (ví dụ: "./input")
-    phase_output_dir = summary_output_dir 
-    # ============================
-    os.makedirs(phase_output_dir, exist_ok=True)
-
-    user_requested_summary = False # Biến cờ để kiểm soát việc người dùng yêu cầu tóm tắt
-
-    while True:
-        task_context = "".join(conversation_history) + f"AGENT: {current_context}"
-        
-        # Nếu người dùng yêu cầu tóm tắt, hãy thêm chỉ dẫn này vào ngữ cảnh của agent
-        if user_requested_summary:
-            task_context += "\n\nQUAN TRỌNG: Người dùng đã yêu cầu bạn tóm tắt lại tất cả các yêu cầu đã thu thập được cho đến thời điểm này. BẮT ĐẦU output của bạn với 'KẾT THÚC_TÓM TẮT:' và trình bày bản tóm tắt chi tiết yêu cầu hệ thống."
-            user_requested_summary = False # Đặt lại cờ
-
-        task = create_initial_requirement_collection_task(input_agent, task_context)
-        
-        temp_crew = Crew(
-            agents=[input_agent],
-            tasks=[task],
-            process=Process.sequential,
-            verbose=False
-        )
-        
-        try:
-            result = temp_crew.kickoff()
-            agent_output = str(result).strip()
-
-            if agent_output.startswith("KẾT THÚC_TÓM TẮT:"):
-                final_summary = agent_output.replace("KẾT THÚC_TÓM TẮT:", "").strip()
-                logging.info("Agent đã hoàn thành thu thập yêu cầu và tạo bản tóm tắt.")
-                
-                print("\n" + "="*80)
-                print("           BẢN TÓM TẮT YÊU CẦU HỆ THỐNG (SYSTEM REQUEST SUMMARY)           ")
-                print("="*80)
-                print(final_summary)
-                print("="*80 + "\n")
-                
-                shared_memory.set("phase_0_initiation", "system_request_summary", final_summary)
-                
-                summary_file_path = os.path.join(phase_output_dir, "System_Request_Summary.md")
-                write_output(summary_file_path, final_summary)
-                logging.info(f"Đã lưu bản tóm tắt yêu cầu hệ thống vào {summary_file_path}.")
-
-                conversation_log_path = os.path.join(phase_output_dir, "initial_requirements_conversation.md")
-                with open(conversation_log_path, "w", encoding="utf-8") as f:
-                    f.write("# Lịch sử hội thoại thu thập yêu cầu ban đầu\n\n")
-                    f.write("".join(conversation_history))
-                    f.write(f"\n\n## Bản tóm tắt yêu cầu cuối cùng:\n{final_summary}\n")
-                logging.info(f"Đã lưu lịch sử hội thoại vào {conversation_log_path}.")
-                break
-
-            else:
-                # Agent đang đặt câu hỏi
-                print(f"\nAGENT HỎI: {agent_output}")
-                # Gợi ý cho người dùng nếu chưa có
-                if not conversation_history or ("TÓM TẮT" not in conversation_history[-1]): # Sửa lỗi chính tả "TÓM CẮT" thành "TÓM TẮT" nếu cần
-                    print(" (Gợi ý: Nếu bạn muốn kết thúc và yêu cầu tóm tắt, hãy gõ 'TÓM TẮT' và nhấn Enter.)")
-
-                conversation_history.append(f"\nAGENT HỎI: {agent_output}\n")
-                
-                user_response = input("BẠN TRẢ LỜI: ")
-                
-                # Kiểm tra nếu người dùng muốn tóm tắt
-                if user_response.strip().upper() == "TÓM TẮT":
-                    user_requested_summary = True
-                    current_context = "Người dùng đã yêu cầu tóm tắt các yêu cầu đã thu thập được."
-                    conversation_history.append(f"BẠN TRẢ LỜI: TÓM TẮT\n")
-                    continue # Bắt đầu vòng lặp mới để agent tạo tóm tắt
-
-                conversation_history.append(f"BẠN TRẢ LỜI: {user_response}\n")
-                current_context = f"Người dùng đã trả lời: {user_response}"
-
-        except Exception as e:
-            logging.error(f"❌ Lỗi trong quá trình tương tác thu thập yêu cầu: {e}", exc_info=True)
-            print("Đã xảy ra lỗi trong quá trình thu thập yêu cầu. Vui lòng kiểm tra log để biết chi tiết.")
-            break
-
-    logging.info("--- Kết thúc quy trình thu thập yêu cầu ---")
+    tasks.append(collect_requirements_task)
+    return tasks

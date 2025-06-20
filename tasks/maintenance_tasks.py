@@ -9,49 +9,64 @@ from docx.shared import Inches
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- Helper functions for parsing multi-document outputs ---
+def clean_text_for_docx(text: str) -> str:
+    """
+    Loại bỏ các ký tự có thể gây lỗi khi ghi vào file .docx hoặc làm phẳng Markdown cơ bản.
+    """
+    clean_text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
+    clean_text = re.sub(r'\n\s*\n', '\n\n', clean_text).strip()
+    clean_text = re.sub(r'#{1,6}\s*', '', clean_text)
+    clean_text = clean_text.replace('**', '').replace('__', '')
+    clean_text = clean_text.replace('*', '').replace('_', '')
+    clean_text = re.sub(r'^- ', '', clean_text, flags=re.MULTILINE)
+    clean_text = re.sub(r'^\d+\.\s*', '', clean_text, flags=re.MULTILINE)
+    return clean_text
+
+def process_and_save_docx(task_output: str, file_path: str, heading: str):
+    doc = Document()
+    doc.add_heading(heading, level=1)
+    cleaned_output = clean_text_for_docx(str(task_output))
+    for paragraph_text in cleaned_output.split('\n'):
+        if paragraph_text.strip():
+            doc.add_paragraph(paragraph_text)
+    doc.save(file_path)
+    logging.info(f"Đã lưu {os.path.basename(file_path)}.")
 
 def process_maintenance_plan_documents(task_output: str, output_base_dir_param: str):
     logging.info(f"--- Bắt đầu xử lý output cho các tài liệu Kế hoạch Bảo trì ---")
     phase_output_dir = os.path.join(output_base_dir_param, "7_maintenance")
     os.makedirs(phase_output_dir, exist_ok=True)
 
-    # Use regex to find content blocks
     plan_content = re.search(r'```maintenance_plan\s*([\s\S]*?)\s*```', task_output)
     checklist_content = re.search(r'```checklist\s*([\s\S]*?)\s*```', task_output)
     sla_policy_content = re.search(r'```sla_policy\s*([\s\S]*?)\s*```', task_output)
     patch_guide_content = re.search(r'```patch_guide\s*([\s\S]*?)\s*```', task_output)
 
-    # Maintenance_and_Support_Plan.docx
-    plan_text = plan_content.group(1).strip() if plan_content else "Không tìm thấy nội dung Kế hoạch Bảo trì và Hỗ trợ."
     plan_doc_path = os.path.join(phase_output_dir, "Maintenance_and_Support_Plan.docx")
-    write_output(plan_doc_path, plan_text)
+    plan_text = plan_content.group(1).strip() if plan_content else "Không tìm thấy nội dung Kế hoạch Bảo trì và Hỗ trợ."
+    process_and_save_docx(plan_text, plan_doc_path, "Kế hoạch Bảo trì và Hỗ trợ")
     shared_memory.set("phase_7_maintenance", "maintenance_and_support_plan_path", plan_doc_path)
     logging.info(f"Đã lưu Maintenance_and_Support_Plan.docx và cập nhật shared_memory.")
 
-    # Maintenance_Checklist.md
-    checklist_text = checklist_content.group(1).strip() if checklist_content else "Không tìm thấy nội dung Danh sách kiểm tra bảo trì."
     checklist_md_path = os.path.join(phase_output_dir, "Maintenance_Checklist.md")
+    checklist_text = checklist_content.group(1).strip() if checklist_content else "Không tìm thấy nội dung Danh sách kiểm tra bảo trì."
     write_output(checklist_md_path, checklist_text)
     shared_memory.set("phase_7_maintenance", "maintenance_checklist_path", checklist_md_path)
     logging.info(f"Đã lưu Maintenance_Checklist.md và cập nhật shared_memory.")
 
-    # SLA_and_Warranty_Policies.docx
-    sla_policy_text = sla_policy_content.group(1).strip() if sla_policy_content else "Không tìm thấy nội dung Chính sách SLA và Bảo hành."
     sla_policy_doc_path = os.path.join(phase_output_dir, "SLA_and_Warranty_Policies.docx")
-    write_output(sla_policy_doc_path, sla_policy_text)
+    sla_policy_text = sla_policy_content.group(1).strip() if sla_policy_content else "Không tìm thấy nội dung Chính sách SLA và Bảo hành."
+    process_and_save_docx(sla_policy_text, sla_policy_doc_path, "Chính sách SLA và Bảo hành")
     shared_memory.set("phase_7_maintenance", "sla_and_warranty_policies_path", sla_policy_doc_path)
     logging.info(f"Đã lưu SLA_and_Warranty_Policies.docx và cập nhật shared_memory.")
 
-    # Patch_Management_Guide.md
-    patch_guide_text = patch_guide_content.group(1).strip() if patch_guide_content else "Không tìm thấy nội dung Hướng dẫn quản lý bản vá."
     patch_guide_md_path = os.path.join(phase_output_dir, "Patch_Management_Guide.md")
+    patch_guide_text = patch_guide_content.group(1).strip() if patch_guide_content else "Không tìm thấy nội dung Hướng dẫn quản lý bản vá."
     write_output(patch_guide_md_path, patch_guide_text)
     shared_memory.set("phase_7_maintenance", "patch_management_guide_path", patch_guide_md_path)
     logging.info(f"Đã lưu Patch_Management_Guide.md và cập nhật shared_memory.")
 
     logging.info(f"--- Hoàn thành xử lý output cho các tài liệu Kế hoạch Bảo trì ---")
-
 
 def process_post_project_review_documents(task_output: str, output_base_dir_param: str):
     logging.info(f"--- Bắt đầu xử lý output cho các tài liệu Đánh giá Sau Dự án ---")
@@ -62,29 +77,25 @@ def process_post_project_review_documents(task_output: str, output_base_dir_para
     lessons_learned_content = re.search(r'```lessons_learned\s*([\s\S]*?)\s*```', task_output)
     post_review_content = re.search(r'```post_project_review\s*([\s\S]*?)\s*```', task_output)
 
-    # Post_Project_Survey_Questionnaire.docx
-    survey_text = survey_content.group(1).strip() if survey_content else "Không tìm thấy nội dung mẫu khảo sát."
     survey_doc_path = os.path.join(phase_output_dir, "Post_Project_Survey_Questionnaire.docx")
-    write_output(survey_doc_path, survey_text)
+    survey_text = survey_content.group(1).strip() if survey_content else "Không tìm thấy nội dung mẫu khảo sát."
+    process_and_save_docx(survey_text, survey_doc_path, "Bảng Câu hỏi Khảo sát Sau Dự án")
     shared_memory.set("phase_7_maintenance", "post_project_survey_questionnaire_path", survey_doc_path)
     logging.info(f"Đã lưu Post_Project_Survey_Questionnaire.docx và cập nhật shared_memory.")
 
-    # Lessons_Learned.md
-    lessons_text = lessons_learned_content.group(1).strip() if lessons_learned_content else "Không tìm thấy nội dung Bài học kinh nghiệm."
     lessons_md_path = os.path.join(phase_output_dir, "Lessons_Learned.md")
+    lessons_text = lessons_learned_content.group(1).strip() if lessons_learned_content else "Không tìm thấy nội dung Bài học kinh nghiệm."
     write_output(lessons_md_path, lessons_text)
     shared_memory.set("phase_7_maintenance", "lessons_learned_path", lessons_md_path)
     logging.info(f"Đã lưu Lessons_Learned.md và cập nhật shared_memory.")
 
-    # Post_Project_Review.docx
-    review_text = post_review_content.group(1).strip() if post_review_content else "Không tìm thấy nội dung Đánh giá Sau Dự án."
     review_doc_path = os.path.join(phase_output_dir, "Post_Project_Review.docx")
-    write_output(review_doc_path, review_text)
+    review_text = post_review_content.group(1).strip() if post_review_content else "Không tìm thấy nội dung Đánh giá Sau Dự án."
+    process_and_save_docx(review_text, review_doc_path, "Đánh giá Sau Dự án")
     shared_memory.set("phase_7_maintenance", "post_project_review_path", review_doc_path)
     logging.info(f"Đã lưu Post_Project_Review.docx và cập nhật shared_memory.")
 
     logging.info(f"--- Hoàn thành xử lý output cho các tài liệu Đánh giá Sau Dự án ---")
-
 
 def process_transition_documents(task_output: str, output_base_dir_param: str):
     logging.info(f"--- Bắt đầu xử lý output cho các tài liệu Chuyển giao ---")
@@ -95,29 +106,25 @@ def process_transition_documents(task_output: str, output_base_dir_param: str):
     transition_plan_content = re.search(r'```transition_plan\s*([\s\S]*?)\s*```', task_output)
     retirement_plan_content = re.search(r'```retirement_plan\s*([\s\S]*?)\s*```', task_output)
 
-    # Change_Request_Document_(CCR)_Template.docx
-    cr_template_text = cr_template_content.group(1).strip() if cr_template_content else "Không tìm thấy nội dung Mẫu tài liệu yêu cầu thay đổi."
     cr_template_doc_path = os.path.join(phase_output_dir, "Change_Request_Document_(CCR)_Template.docx")
-    write_output(cr_template_doc_path, cr_template_text)
+    cr_template_text = cr_template_content.group(1).strip() if cr_template_content else "Không tìm thấy nội dung Mẫu tài liệu yêu cầu thay đổi."
+    process_and_save_docx(cr_template_text, cr_template_doc_path, "Mẫu Tài liệu Yêu cầu Thay đổi (CCR)")
     shared_memory.set("phase_7_maintenance", "change_request_template_path", cr_template_doc_path)
     logging.info(f"Đã lưu Change_Request_Document_(CCR)_Template.docx và cập nhật shared_memory.")
 
-    # Transition_Out_Plan.docx
-    transition_plan_text = transition_plan_content.group(1).strip() if transition_plan_content else "Không tìm thấy nội dung Kế hoạch chuyển giao."
     transition_plan_doc_path = os.path.join(phase_output_dir, "Transition_Out_Plan.docx")
-    write_output(transition_plan_doc_path, transition_plan_text)
+    transition_plan_text = transition_plan_content.group(1).strip() if transition_plan_content else "Không tìm thấy nội dung Kế hoạch chuyển giao."
+    process_and_save_docx(transition_plan_text, transition_plan_doc_path, "Kế hoạch Chuyển giao")
     shared_memory.set("phase_7_maintenance", "transition_out_plan_path", transition_plan_doc_path)
     logging.info(f"Đã lưu Transition_Out_Plan.docx và cập nhật shared_memory.")
 
-    # Product_Retirement_Plan.docx
-    retirement_plan_text = retirement_plan_content.group(1).strip() if retirement_plan_content else "Không tìm thấy nội dung Kế hoạch ngừng sản phẩm."
     retirement_plan_doc_path = os.path.join(phase_output_dir, "Product_Retirement_Plan.docx")
-    write_output(retirement_plan_doc_path, retirement_plan_text)
+    retirement_plan_text = retirement_plan_content.group(1).strip() if retirement_plan_content else "Không tìm thấy nội dung Kế hoạch ngừng sản phẩm."
+    process_and_save_docx(retirement_plan_text, retirement_plan_doc_path, "Kế hoạch Ngừng Sản phẩm")
     shared_memory.set("phase_7_maintenance", "product_retirement_plan_path", retirement_plan_doc_path)
     logging.info(f"Đã lưu Product_Retirement_Plan.docx và cập nhật shared_memory.")
 
     logging.info(f"--- Hoàn thành xử lý output cho các tài liệu Chuyển giao ---")
-
 
 def process_knowledge_transfer_documents(task_output: str, output_base_dir_param: str):
     logging.info(f"--- Bắt đầu xử lý output cho các tài liệu Chuyển giao Kiến thức ---")
@@ -127,34 +134,21 @@ def process_knowledge_transfer_documents(task_output: str, output_base_dir_param
     dev_knowledge_content = re.search(r'```dev_knowledge\s*([\s\S]*?)\s*```', task_output)
     support_summary_content = re.search(r'```support_summary\s*([\s\S]*?)\s*```', task_output)
 
-    # Developer_Knowledge_Transfer_Report.md
-    dev_knowledge_text = dev_knowledge_content.group(1).strip() if dev_knowledge_content else "Không tìm thấy nội dung Báo cáo chuyển giao kiến thức cho nhà phát triển."
     dev_knowledge_md_path = os.path.join(phase_output_dir, "Developer_Knowledge_Transfer_Report.md")
+    dev_knowledge_text = dev_knowledge_content.group(1).strip() if dev_knowledge_content else "Không tìm thấy nội dung Báo cáo chuyển giao kiến thức cho nhà phát triển."
     write_output(dev_knowledge_md_path, dev_knowledge_text)
     shared_memory.set("phase_7_maintenance", "developer_knowledge_transfer_report_path", dev_knowledge_md_path)
     logging.info(f"Đã lưu Developer_Knowledge_Transfer_Report.md và cập nhật shared_memory.")
 
-    # Global_Application_Support_Summary.md
-    support_summary_text = support_summary_content.group(1).strip() if support_summary_content else "Không tìm thấy nội dung Tóm tắt hỗ trợ ứng dụng toàn cầu."
     support_summary_md_path = os.path.join(phase_output_dir, "Global_Application_Support_Summary.md")
+    support_summary_text = support_summary_content.group(1).strip() if support_summary_content else "Không tìm thấy nội dung Tóm tắt hỗ trợ ứng dụng toàn cầu."
     write_output(support_summary_md_path, support_summary_text)
     shared_memory.set("phase_7_maintenance", "global_application_support_summary_path", support_summary_md_path)
     logging.info(f"Đã lưu Global_Application_Support_Summary.md và cập nhật shared_memory.")
 
     logging.info(f"--- Hoàn thành xử lý output cho các tài liệu Chuyển giao Kiến thức ---")
 
-
 def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_agent, researcher_agent, output_base_dir):
-    """
-    Tạo các task liên quan đến giai đoạn Bảo trì.
-    Args:
-        site_reliability_engineer_agent: Agent chính cho Maintenance.
-        project_manager_agent, researcher_agent: Các agent chung.
-        output_base_dir: Đường dẫn thư mục base.
-    Returns:
-        list: Danh sách các Task đã tạo.
-    """
-    # Lấy dữ liệu từ shared_memory các phase trước (điều chỉnh tên keys để khớp với thực tế)
     deployment_plan_doc_path = shared_memory.get("phase_6_deployment", "production_implementation_plan_docx_path") or "N/A"
     monitoring_guide_path = shared_memory.get("phase_6_deployment", "monitoring_and_alerting_setup_guide_path") or "N/A"
     source_code_doc_path = shared_memory.get("phase_4_development", "source_code_document_path") or "N/A"
@@ -172,12 +166,10 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
         logging.warning("Previous phase development/design documents missing for knowledge transfer tasks.")
         knowledge_transfer_context = "Không có tài liệu mã nguồn/thiết kế API liên quan nào được tìm thấy."
 
-    # Tạo thư mục con cho Phase 7 Maintenance (nếu chưa có)
     phase_output_dir = os.path.join(output_base_dir, "7_maintenance")
     os.makedirs(phase_output_dir, exist_ok=True)
     logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 7: {phase_output_dir}")
 
-    # --- 1. Task: Maintenance Plan (tạo 4 tài liệu) ---
     maintenance_plan_tasks = Task(
         description=(
             f"Tạo các tài liệu sau trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
@@ -203,7 +195,6 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
         callback=lambda output: process_maintenance_plan_documents(str(output), output_base_dir)
     )
 
-    # --- 2. Task: Feedback and Post-Project Review (tạo 3 tài liệu) ---
     feedback_review_tasks = Task(
         description=(
             f"Tạo ba tài liệu sau trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
@@ -227,7 +218,6 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
         callback=lambda output: process_post_project_review_documents(str(output), output_base_dir)
     )
 
-    # --- 3. Task: Transition and Product Retirement (tạo 3 tài liệu) ---
     transition_tasks = Task(
         description=(
             f"Tạo ba tài liệu sau trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
@@ -251,7 +241,6 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
         callback=lambda output: process_transition_documents(str(output), output_base_dir)
     )
 
-    # --- 4. Task: Support Knowledge Transfer (tạo 2 tài liệu) ---
     support_knowledge_tasks = Task(
         description=(
             f"Tạo hai tài liệu sau trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
@@ -268,11 +257,10 @@ def create_maintenance_tasks(site_reliability_engineer_agent, project_manager_ag
             "'- `support_summary` cho Global_Application_Support_Summary.md'"
         ),
         agent=site_reliability_engineer_agent,
-        context=[maintenance_plan_tasks],  # Chỉ dùng task hợp lệ
+        context=[maintenance_plan_tasks],
         callback=lambda output: process_knowledge_transfer_documents(str(output), output_base_dir)
     )
 
-    # --- 5. Task: Research Maintenance Best Practices (Researcher) ---
     research_maintenance_best_practices = Task(
         description=(
             f"Nghiên cứu các phương pháp hay nhất (best practices) trong bảo trì và vận hành hệ thống "

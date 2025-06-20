@@ -74,7 +74,7 @@ def create_development_tasks(development_agent, project_manager_agent, output_ba
     system_design_doc = shared_memory.get("phase_3_design", "system_architecture") # Assuming this maps to System_Architecture.docx
     db_design_doc = shared_memory.get("phase_3_design", "database_design_document")
     api_design_doc = shared_memory.get("phase_3_design", "api_design_document")
-    hld_doc = shared_memory.get("phase_3_design", "hld") # Assuming this maps to High_Level_Design.docx
+    hld_doc = shared_memory.get("phase_3_design", "hld_document_path") # Assuming this maps to High_Level_Design.docx
     lld_doc = shared_memory.get("phase_3_design", "lld") # Assuming this maps to Low_Level_Design.docx
     technical_requirements_doc = shared_memory.get("phase_3_design", "technical_requirements_document") # Assuming this maps to Technical_Requirements_Document.docx
     coding_guidelines_doc_path = shared_memory.get("phase_4_development", "coding_standards_document_path") # Output from dev_standards_tasks

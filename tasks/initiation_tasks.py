@@ -1,488 +1,455 @@
-import os
-import logging
-import re
 from crewai import Task
-from utils.file_writer import write_output
-from memory.shared_memory import shared_memory
-from docx import Document
-from docx.shared import Inches
-from textwrap import dedent
-import pandas as pd
+from utils.output_formats import create_docx, create_xlsx
+from memory.shared_memory import SharedMemory
+import os
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def clean_text_for_docx(text: str) -> str:
+def create_initiation_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, initiation_agent):
     """
-    Loại bỏ các ký tự có thể gây lỗi khi ghi vào file .docx hoặc làm phẳng Markdown cơ bản.
+    Tạo các tác vụ cho giai đoạn Khởi tạo (Initiation Phase).
     """
-    clean_text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
-    clean_text = re.sub(r'\n\s*\n', '\n\n', clean_text).strip()
-    clean_text = re.sub(r'#{1,6}\s*', '', clean_text)
-    clean_text = clean_text.replace('**', '').replace('__', '')
-    clean_text = clean_text.replace('*', '').replace('_', '')
-    clean_text = re.sub(r'^- ', '', clean_text, flags=re.MULTILINE)
-    clean_text = re.sub(r'^\d+\.\s*', '', clean_text, flags=re.MULTILINE)
-    return clean_text
+    tasks = []
 
-def process_and_save_docx(task_output: str, file_path: str, heading: str):
-    doc = Document()
-    doc.add_heading(heading, level=1)
-    cleaned_output = clean_text_for_docx(str(task_output))
-    for paragraph_text in cleaned_output.split('\n'):
-        if paragraph_text.strip():
-            doc.add_paragraph(paragraph_text)
-    doc.save(file_path)
-    logging.info(f"Đã lưu {os.path.basename(file_path)}.")
-
-def process_and_save_xlsx(task_output: str, file_path: str, sheet_name: str = 'Sheet1'):
-    try:
-        lines = task_output.strip().split('\n')
-        if not lines:
-            raise ValueError("Output is empty")
-        if ',' in lines[0] or '\t' in lines[0]:
-            data = [line.split(',') if ',' in lines[0] else line.split('\t') for line in lines]
-            df = pd.DataFrame(data[1:], columns=data[0])
-        else:
-            if any(':' in line for line in lines):
-                data = {}
-                for line in lines:
-                    if ':' in line:
-                        key, value = line.split(':', 1)
-                        data[key.strip()] = value.strip()
-                df = pd.DataFrame([data]) if data else pd.DataFrame({'Content': lines})
-            else:
-                df = pd.DataFrame({'Content': lines})
-        df.to_excel(file_path, index=False, sheet_name=sheet_name)
-        logging.info(f"Đã lưu {os.path.basename(file_path)}.")
-    except Exception as e:
-        logging.error(f"Lỗi khi lưu file Excel {file_path}: {e}. Lưu dưới dạng Markdown thay thế.")
-        write_output(file_path.replace('.xlsx', '.md'), f"Lỗi tạo Excel: {e}\n\nNội dung gốc:\n{task_output}")
-    shared_memory.set("phase_0_initiation", os.path.basename(file_path).replace('.', '_').lower() + '_path', file_path)
-
-def create_initiation_tasks(project_manager_agent, researcher_agent, initiation_agent, output_base_dir):
-    phase_output_dir = os.path.join(output_base_dir, "0_initiation")
-    os.makedirs(phase_output_dir, exist_ok=True)
-    logging.info(f"Đảm bảo thư mục output cho Phase 0 tồn tại: {phase_output_dir}")
-
-    def initiation_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'initiation_tasks' ---")
-        project_charter_content_match = re.search(r'```project_charter\s*([\s\S]*?)\s*```', str(output))
-        business_case_content_match = re.search(r'```business_case\s*([\s\S]*?)\s*```', str(output))
-        feasibility_report_content_match = re.search(r'```feasibility_report\s*([\s\S]*?)\s*```', str(output))
-        if project_charter_content_match:
-            process_and_save_docx(project_charter_content_match.group(1), os.path.join(phase_output_dir, "Project_Charter.docx"), "Điều lệ Dự án")
-            shared_memory.set("phase_0_initiation", "project_charter_path", os.path.join(phase_output_dir, "Project_Charter.docx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Project Charter. File Project_Charter.docx sẽ không được tạo.")
-        if business_case_content_match:
-            process_and_save_docx(business_case_content_match.group(1), os.path.join(phase_output_dir, "Business_Case.docx"), "Trường hợp Kinh doanh")
-            shared_memory.set("phase_0_initiation", "business_case_path", os.path.join(phase_output_dir, "Business_Case.docx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Business Case. File Business_Case.docx sẽ không được tạo.")
-        if feasibility_report_content_match:
-            process_and_save_docx(feasibility_report_content_match.group(1), os.path.join(phase_output_dir, "Feasibility_Report.docx"), "Báo cáo Khả thi")
-            shared_memory.set("phase_0_initiation", "feasibility_report_path", os.path.join(phase_output_dir, "Feasibility_Report.docx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Feasibility Report. File Feasibility_Report.docx sẽ không được tạo.")
-
-    initiation_tasks = Task(
-        description=dedent(f"""
-            Là {getattr(initiation_agent, 'role', 'Chuyên gia Khởi tạo')}, bạn phải xác định và định nghĩa dự án một cách rõ ràng.
-            Tạo ba tài liệu quan trọng:
-            1.  **Điều lệ Dự án (Project Charter):** Ủy quyền cho Project Manager, phác thảo các mục tiêu cấp cao, phạm vi ban đầu và các bên liên quan chính.
-            2.  **Trường hợp Kinh doanh (Business Case):** Mô tả vấn đề kinh doanh, giải pháp được đề xuất, lợi ích mong đợi và phân tích sơ bộ về chi phí-lợi ích.
-            3.  **Báo cáo Khả thi (Feasibility Report):** Đánh giá tính khả thi kỹ thuật, vận hành, pháp lý và kinh tế của dự án.
-            Sử dụng thông tin thu thập được từ yêu cầu người dùng ban đầu.
-            Output của bạn phải chứa 3 phần riêng biệt, mỗi phần được bao bọc bởi các tag độc đáo:
-            ```project_charter
-            [Nội dung Điều lệ Dự án ở đây]
-            ```
-            ```business_case
-            [Nội dung Trường hợp Kinh doanh ở đây]
-            ```
-            ```feasibility_report
-            [Nội dung Báo cáo Khả thi ở đây]
-            ```
-            Đảm bảo nội dung đầy đủ và chuyên nghiệp cho từng tài liệu.
-            --- Context:
-            Yêu cầu Người dùng Ban đầu: {shared_memory.get('phase_0_initiation', 'system_request_summary') or 'Chưa có yêu cầu người dùng ban đầu.'}
-        """),
-        expected_output="3 tài liệu tiếng Việt: 'Project_Charter.docx', 'Business_Case.docx', 'Feasibility_Report.docx' với nội dung chuyên nghiệp, được trích xuất từ 3 khối đầu ra riêng biệt của bạn.",
-        agent=initiation_agent,
-        context=[],
-        callback=initiation_tasks_callback
-    )
-
-    def keyword_generation_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'keyword_generation_tasks' ---")
-        filepath = os.path.join(phase_output_dir, "Query_Keywords.txt")
-        write_output(filepath, str(output))
-        shared_memory.set("phase_0_initiation", "query_keywords_path", filepath)
-        logging.info(f"Đã lưu Query_Keywords.txt và cập nhật shared_memory.")
-
-    keyword_generation_tasks = Task(
-        description=dedent(f"""
-            Dựa trên Điều lệ Dự án và yêu cầu ban đầu, tạo ra các từ khóa và câu truy vấn tìm kiếm cần thiết
-            để Researcher Agent có thể thực hiện nghiên cứu sâu hơn về các công nghệ, giải pháp, tiêu chuẩn ngành,
-            và các vấn đề tiềm năng liên quan đến dự án.
-            Output là một danh sách các từ khóa/câu truy vấn, mỗi mục trên một dòng.
-            --- Context:
-            Yêu cầu Người dùng Ban đầu: {shared_memory.get('phase_0_initiation', 'system_request_summary') or 'N/A'}
-            Điều lệ Dự án: {shared_memory.get('phase_0_initiation', 'project_charter_path') or 'N/A'}
-        """),
-        expected_output="Tài liệu tiếng Việt 'Query_Keywords.txt' liệt kê các từ khóa và truy vấn tìm kiếm, mỗi từ/câu trên một dòng riêng biệt.",
+    # Tác vụ tạo tài liệu phương pháp tốt nhất
+    best_practices_task = Task(
+        description=(
+            "Sử dụng công cụ `generate_best_practices` để tạo tài liệu phương pháp tốt nhất cho giai đoạn khởi tạo dự án. "
+            "Tài liệu này cần đề xuất các thực tiễn hàng đầu, bao gồm chiến lược quản lý rủi ro, phương pháp thu thập yêu cầu, và cách tiếp cận lập kế hoạch sơ bộ. "
+            "Đảm bảo rằng các khuyến nghị dựa trên các tiêu chuẩn quản lý dự án quốc tế như PMI hoặc PRINCE2. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Best_Practices_Khởi_tạo.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `best_practices`."
+        ),
         agent=researcher_agent,
-        context=[initiation_tasks],
-        callback=keyword_generation_tasks_callback
+        expected_output=(
+            "Tài liệu `Best_Practices_Khởi_tạo.docx` chứa danh sách các phương pháp tốt nhất, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `best_practices`."
+        ),
+        callback=lambda output: shared_memory.save("best_practices", output)
     )
 
-    def phase_req_analysis_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'phase_req_analysis_tasks' ---")
-        filepath = os.path.join(phase_output_dir, "Phase_Specific_Requirements.docx")
-        process_and_save_docx(str(output), filepath, "Yêu cầu Cụ thể Giai đoạn Khởi tạo")
-        shared_memory.set("phase_0_initiation", "phase_specific_requirements_path", filepath)
-        logging.info(f"Đã lưu Phase_Specific_Requirements.docx và cập nhật shared_memory.")
+    # Tác vụ tạo Project Initiation Agenda
+    project_initiation_agenda_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Chương trình nghị sự khởi tạo dự án (Project Initiation Agenda) dựa trên dữ liệu từ `system_request_summary` trong SharedMemory. "
+            "Tài liệu này là lịch trình họp khởi động dự án, xác định các bên liên quan, nhà tài trợ và thành viên kỹ thuật/kinh doanh chủ chốt. "
+            "Nó cung cấp cơ hội để quản lý dự án tạo động lực, xác lập mục tiêu chung và đánh giá nhóm. "
+            "Nội dung phải bao gồm: chủ đề họp, người khởi xướng, thời gian họp, danh sách người tham dự, tài liệu cần đọc, chủ đề thảo luận (ví dụ: mục tiêu dự án, phạm vi sơ bộ, rủi ro ban đầu, kế hoạch truyền thông), người trình bày, và tài liệu đính kèm. "
+            "Đảm bảo rằng tài liệu được trình bày rõ ràng, chuyên nghiệp, và phù hợp để sử dụng trong các cuộc họp với các bên liên quan cấp cao. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Project_Initiation_Agenda.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `project_initiation_agenda`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Project_Initiation_Agenda.docx` chứa chương trình nghị sự, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `project_initiation_agenda`."
+        ),
+        callback=lambda output: create_docx(
+            "Chương trình nghị sự khởi tạo dự án",
+            [
+                "1. Mục tiêu cuộc họp: Thống nhất mục tiêu và phạm vi dự án.",
+                "2. Danh sách tham gia: Các bên liên quan chính (lấy từ system_request_summary).",
+                "3. Thời gian biểu: Lịch trình chi tiết cho cuộc họp.",
+                "4. Chủ đề thảo luận: Phạm vi, rủi ro, kế hoạch sơ bộ, và chiến lược truyền thông.",
+                shared_memory.load("system_request_summary") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Project_Initiation_Agenda.docx"
+        ) and shared_memory.save("project_initiation_agenda", output)
+    )
 
-    phase_req_analysis_tasks = Task(
-        description=dedent(f"""
-            Là Project Manager, bạn cần phân tích các yêu cầu đã thu thập được từ yêu cầu ban đầu và Điều lệ Dự án.
-            Xác định và tài liệu hóa các yêu cầu cụ thể cần được đáp ứng **trong Giai đoạn Khởi tạo (Phase 0) này**.
-            Điều này bao gồm các yêu cầu để hoàn thành các deliverables của Phase 0, không phải toàn bộ yêu cầu dự án.
-            Output là một tài liệu Word với các yêu cầu được trình bày rõ ràng, có cấu trúc.
-            --- Context:
-            Yêu cầu Người dùng Ban đầu: {shared_memory.get('phase_0_initiation', 'system_request_summary') or 'N/A'}
-            Điều lệ Dự án: {shared_memory.get('phase_0_initiation', 'project_charter_path') or 'N/A'}
-        """),
-        expected_output="Tài liệu tiếng Việt 'Phase_Specific_Requirements.docx' mô tả chi tiết các yêu cầu cụ thể cho giai đoạn khởi tạo của dự án.",
+    # Tác vụ tạo Project Charter
+    project_charter_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Bản điều lệ dự án (Project Charter) dựa trên dữ liệu từ `system_request_summary` trong SharedMemory. "
+            "Tài liệu này là tài liệu khởi đầu chính thức dự án trong Giai đoạn Khởi tạo, xác định mục tiêu, phạm vi, các bên liên quan và quyền hạn của quản lý dự án. "
+            "Nó là bản tổng quan cấp cao, một trang, được dùng để đảm bảo tất cả mọi người hiểu rõ mục tiêu và cách thức thực hiện. "
+            "Nội dung phải bao gồm: tuyên bố cơ hội, mục tiêu, phạm vi dự án, quy trình trong và ngoài phạm vi, nhóm dự án, các bên liên quan, mốc thời gian, chi phí ước tính. "
+            "Nội dung phải được trình bày theo cấu trúc chuẩn quản lý dự án (PMI hoặc PRINCE2), bao gồm các phần như Tóm tắt dự án, Mục tiêu, Phạm vi, Tổ chức dự án, Quản lý rủi ro sơ bộ, và Phê duyệt. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Project_Charter.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `project_charter`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Project_Charter.docx` chứa bản điều lệ dự án, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `project_charter`."
+        ),
+        callback=lambda output: create_docx(
+            "Bản điều lệ dự án",
+            [
+                "1. Tóm tắt dự án: Mô tả ngắn gọn về dự án và bối cảnh.",
+                "2. Mục tiêu: Các mục tiêu cụ thể (lấy từ system_request_summary).",
+                "3. Phạm vi: Phạm vi dự án và các hạng mục loại trừ.",
+                "4. Các bên liên quan: Danh sách và vai trò của các bên liên quan chính.",
+                "5. Giả định và ràng buộc: Các giả định và hạn chế (ngân sách, thời gian, tài nguyên).",
+                "6. Cột mốc sơ bộ: Các mốc thời gian quan trọng.",
+                "7. Quản lý rủi ro: Các rủi ro ban đầu và chiến lược giảm thiểu.",
+                shared_memory.load("system_request_summary") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Project_Charter.docx"
+        ) and shared_memory.save("project_charter", output)
+    )
+
+    # Tác vụ tạo Business Case Document
+    business_case_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Trường hợp kinh doanh (Business Case Document) dựa trên dữ liệu từ `system_request_summary` trong SharedMemory. "
+            "Tài liệu này xác định giá trị kinh doanh tiềm năng của dự án, thường đi kèm với Project Charter để trình bày với lãnh đạo nhằm được phê duyệt. "
+            "Nó cần đánh giá các lợi ích kinh doanh của dự án, bao gồm lợi ích tài chính (ROI, NPV, lợi nhuận, tiết kiệm chi phí, thị phần) và phi tài chính (cải thiện quy trình, nâng cao trải nghiệm khách hàng, yếu tố xã hội/môi trường). "
+            "Nội dung phải bao gồm: mô tả nhu cầu, vấn đề, giải pháp; lợi ích định lượng và định tính; rủi ro; yêu cầu; chi phí; tiến độ; chất lượng; khuyến nghị và lựa chọn thay thế; phê duyệt từ các bên liên quan. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Business_Case_Document.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `business_case`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Business_Case_Document.docx` chứa trường hợp kinh doanh, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `business_case`."
+        ),
+        callback=lambda output: create_docx(
+            "Tài liệu trường hợp kinh doanh",
+            [
+                "1. Tóm tắt điều hành: Tổng quan về lợi ích và mục tiêu kinh doanh.",
+                "2. Lợi ích kinh doanh: Lợi ích tài chính và phi tài chính (lấy từ system_request_summary).",
+                "3. Phân tích chi phí: Chi phí ước tính ban đầu.",
+                "4. Rủi ro kinh doanh: Các rủi ro tiềm ẩn và chiến lược giảm thiểu.",
+                "5. Khuyến nghị: Lý do thực hiện dự án.",
+                shared_memory.load("system_request_summary") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Business_Case_Document.docx"
+        ) and shared_memory.save("business_case", output)
+    )
+
+    # Tác vụ tạo Feasibility Study
+    feasibility_study_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Nghiên cứu khả thi (Feasibility Study) dựa trên dữ liệu từ `system_request_summary` trong SharedMemory. "
+            "Báo cáo này chứa thông tin kỹ thuật, kinh doanh và chi phí để đánh giá tính khả thi và tiềm năng của dự án, dựa trên mức độ khó khăn, kinh nghiệm cần thiết, thời gian, nguồn lực, ảnh hưởng đến hoạt động hiện tại, kế hoạch dự phòng nếu kéo dài, yếu tố môi trường, văn hóa công ty, nhân lực hiện có, quy trình hiện hành, và phân tích chi phí/lợi ích. "
+            "Nội dung phải bao gồm: giới thiệu, mục tiêu, phạm vi; hệ thống hiện tại; môi trường vận hành; tổ chức người dùng; sản phẩm cuối cùng; giải pháp và lựa chọn thay thế; phê duyệt; phân tích khả thi kỹ thuật (công nghệ, cơ sở hạ tầng); khả thi tài chính (ngân sách, ROI); khả thi tổ chức (nhân sự, quy trình); khả thi pháp lý; rủi ro khả thi. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Feasibility_Study.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `feasibility_study`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Feasibility_Study.docx` chứa nghiên cứu khả thi, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `feasibility_study`."
+        ),
+        callback=lambda output: create_docx(
+            "Nghiên cứu khả thi",
+            [
+                "1. Mục tiêu nghiên cứu: Xác định tính khả thi của dự án.",
+                "2. Khả thi kỹ thuật: Công nghệ, cơ sở hạ tầng cần thiết.",
+                "3. Khả thi tài chính: Ngân sách, ROI, và nguồn tài trợ.",
+                "4. Khả thi tổ chức: Nhân sự, quy trình, và năng lực hiện tại.",
+                "5. Khả thi pháp lý: Các quy định và yêu cầu tuân thủ.",
+                "6. Rủi ro khả thi: Các rủi ro tiềm ẩn và chiến lược giảm thiểu.",
+                shared_memory.load("system_request_summary") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Feasibility_Study.docx"
+        ) and shared_memory.save("feasibility_study", output)
+    )
+
+    # Tác vụ tạo Value Proposition Template
+    value_proposition_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Mẫu giá trị đề xuất (Value Proposition Template) dựa trên dữ liệu từ `system_request_summary` trong SharedMemory. "
+            "Biểu mẫu này giúp đánh giá giá trị của một ứng dụng, hệ thống hoặc sản phẩm đề xuất (thường từ bên ngoài) nhằm hỗ trợ ra quyết định, sử dụng kèm với Business Case Document. "
+            "Nội dung phải bao gồm: sản phẩm/dịch vụ đề xuất, mô tả dự án, thị trường mục tiêu, nhu cầu và ngưỡng chịu đựng, tính năng cần thiết, lợi ích, quyết định tự phát triển hay mua ngoài. "
+            "Tài liệu cần xác định giá trị cốt lõi mà dự án mang lại cho các bên liên quan, bao gồm lợi ích cụ thể cho khách hàng, tổ chức, và các đối tác. "
+            "Đảm bảo tài liệu được trình bày rõ ràng và ngắn gọn để sử dụng trong các buổi thuyết trình với các bên liên quan. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Value_Proposition_Template.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `value_proposition`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Value_Proposition_Template.docx` chứa mẫu giá trị đề xuất, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `value_proposition`."
+        ),
+        callback=lambda output: create_docx(
+            "Mẫu giá trị đề xuất",
+            [
+                "1. Mô tả giá trị: Giá trị cốt lõi của dự án (lấy từ system_request_summary).",
+                "2. Đối tượng hưởng lợi: Khách hàng, tổ chức, và các đối tác.",
+                "3. Lợi ích chính: Các lợi ích cụ thể mà dự án mang lại.",
+                "4. Điểm khác biệt: Những yếu tố làm dự án nổi bật so với các giải pháp khác.",
+                shared_memory.load("system_request_summary") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Value_Proposition_Template.docx"
+        ) and shared_memory.save("value_proposition", output)
+    )
+
+    # Tác vụ tạo Project or Issue Submission Form
+    submission_form_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Mẫu gửi dự án hoặc vấn đề (Project or Issue Submission Form) dựa trên dữ liệu từ `system_request_summary` trong SharedMemory. "
+            "Mẫu đơn tóm tắt 1 trang giúp nhận diện dự án đề xuất, cơ hội, mục tiêu kinh doanh (giảm chi phí, tăng hiệu suất, tuân thủ quy định), phạm vi, các vấn đề và khuyến nghị. "
+            "Biểu mẫu này giúp xác định cơ hội tiềm năng về kinh doanh/CNTT, những hệ thống liên quan, các phòng ban bị ảnh hưởng, các yếu tố trong và ngoài phạm vi dự án, chi phí dự kiến, các vấn đề trọng yếu và khuyến nghị. "
+            "Nội dung phải bao gồm: mô tả vấn đề, mức độ ưu tiên, tác động, hành động đề xuất. "
+            "Đảm bảo mẫu được thiết kế dễ sử dụng và phù hợp với quy trình quản lý dự án. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Project_or_Issue_Submission_Form.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `submission_form`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Project_or_Issue_Submission_Form.docx` chứa mẫu gửi dự án hoặc vấn đề, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `submission_form`."
+        ),
+        callback=lambda output: create_docx(
+            "Mẫu gửi dự án hoặc vấn đề",
+            [
+                "1. Mô tả vấn đề: Thông tin chi tiết về dự án hoặc vấn đề (lấy từ system_request_summary).",
+                "2. Mức độ ưu tiên: Cao, trung bình, thấp.",
+                "3. Tác động: Ảnh hưởng đến dự án hoặc tổ chức.",
+                "4. Hành động đề xuất: Các bước giải quyết được đề xuất.",
+                shared_memory.load("system_request_summary") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Project_or_Issue_Submission_Form.docx"
+        ) and shared_memory.save("submission_form", output)
+    )
+
+    # Tác vụ tạo Project Cost - Benefit Analysis
+    cost_benefit_analysis_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` và `create_analysis_table` để tạo tài liệu Phân tích chi phí - lợi ích (Project Cost - Benefit Analysis) dựa trên dữ liệu từ `system_request_summary` và `business_case` trong SharedMemory. "
+            "Tài liệu này xác định dự án đề xuất, cơ hội, mục tiêu kinh doanh, phạm vi, các vấn đề, lựa chọn thay thế hoặc khuyến nghị, và phê duyệt bởi các bên liên quan chủ chốt. "
+            "Phân tích này cho thấy có nên đầu tư thời gian, nguồn lực, chi phí cho dự án hay không dựa trên giá trị lợi ích và chi phí. "
+            "Nội dung phải bao gồm: thông tin chung (tên dự án, nhà tài trợ, mục đích, lợi ích), khuyến nghị và lựa chọn thay thế, chi phí và nguồn lực, lịch trình, rủi ro, phân tích rủi ro. "
+            "Lưu tài liệu dưới dạng `.docx` và bảng phân tích dưới dạng `.xlsx` trong thư mục `output/0_initiation` với tên `Project_Cost_Benefit_Analysis.docx` và `Project_Cost_Benefit_Analysis.xlsx`. "
+            "Lưu kết quả vào SharedMemory với khóa `cost_benefit_analysis`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Project_Cost_Benefit_Analysis.docx` và `Project_Cost_Benefit_Analysis.xlsx` chứa phân tích chi phí - lợi ích, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `cost_benefit_analysis`."
+        ),
+        callback=lambda output: (
+            create_docx(
+                "Phân tích chi phí - lợi ích",
+                [
+                    "1. Tóm tắt chi phí: Tổng quan về chi phí dự án.",
+                    "2. Lợi ích dự kiến: Lợi ích tài chính và phi tài chính (lấy từ business_case).",
+                    "3. Phân tích định lượng: ROI, NPV, và các chỉ số tài chính khác.",
+                    "4. Kết luận: Đánh giá tổng thể về tính khả thi tài chính.",
+                    shared_memory.load("system_request_summary") or "Không có dữ liệu",
+                    shared_memory.load("business_case") or "Không có dữ liệu"
+                ],
+                f"{output_base_dir}/0_initiation/Project_Cost_Benefit_Analysis.docx"
+            ) and
+            create_xlsx(
+                [
+                    ["Category", "Description", "Cost", "Benefit"],
+                    ["Personnel", "Labor costs", "TBD", "TBD"],
+                    ["Technology", "Software and hardware", "TBD", "TBD"],
+                    ["Infrastructure", "Facilities and equipment", "TBD", "TBD"]
+                ],
+                f"{output_base_dir}/0_initiation/Project_Cost_Benefit_Analysis.xlsx"
+            ) and
+            shared_memory.save("cost_benefit_analysis", output)
+        )
+    )
+
+    # Tác vụ tạo Project Team Definition
+    project_team_definition_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Định nghĩa nhóm dự án (Project Team Definition) dựa trên dữ liệu từ `project_charter` trong SharedMemory. "
+            "Tài liệu xác định các nhóm kinh doanh và kỹ thuật chịu trách nhiệm khởi tạo, phân tích, phát triển, kiểm thử, triển khai và phê duyệt dự án. "
+            "Nhóm dự án bao gồm các nguồn lực được phân công để hoàn thành mục tiêu và sản phẩm của dự án, có thể là nhóm chức năng đơn lẻ hoặc đa chức năng. "
+            "Nội dung phải bao gồm: tổng quan buổi họp, nhận diện các bên liên quan và thành viên dự án, lịch trình các cột mốc chính, trách nhiệm (hoàn thành công việc đúng thời hạn, ngân sách, và báo cáo tiến độ), cơ cấu tổ chức, danh sách thành viên, vai trò và trách nhiệm, yêu cầu kỹ năng. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Project_Team_Definition.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `project_team_definition`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Project_Team_Definition.docx` chứa định nghĩa nhóm dự án, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `project_team_definition`."
+        ),
+        callback=lambda output: create_docx(
+            "Định nghĩa nhóm dự án",
+            [
+                "1. Cơ cấu tổ chức: Sơ đồ tổ chức của nhóm dự án (lấy từ project_charter).",
+                "2. Danh sách thành viên: Các thành viên và vai trò chính.",
+                "3. Vai trò và trách nhiệm: Mô tả chi tiết trách nhiệm của từng vai trò.",
+                "4. Yêu cầu kỹ năng: Kỹ năng và kinh nghiệm cần thiết.",
+                shared_memory.load("project_charter") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Project_Team_Definition.docx"
+        ) and shared_memory.save("project_team_definition", output)
+    )
+
+    # Tác vụ tạo Identification List
+    identification_list_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Danh sách nhận diện các bên liên quan (Stakeholder Identification List) dựa trên dữ liệu từ `project_charter` trong SharedMemory. "
+            "Danh sách xác định các bên liên quan cung cấp khả năng nhận diện những cá nhân, nhóm, hoặc tổ chức có thể ảnh hưởng hoặc bị ảnh hưởng bởi dự án, phân tích kỳ vọng của họ và mức độ ảnh hưởng tới dự án, đồng thời phát triển chiến lược và cách tiếp cận phù hợp để thu hút sự tham gia của họ. "
+            "Việc xác định bao gồm các quy trình để nhận diện cá nhân, nhóm, hoặc tổ chức có liên quan, phân tích kỳ vọng và tác động, xây dựng chiến lược quản lý hiệu quả sự tham gia, nhận diện tên, chức danh, vai trò tiềm năng, mức độ hiểu biết và cam kết, xác định mức độ quyền lực, quan tâm và ảnh hưởng, quản lý và kiểm soát liên tục các bên liên quan. "
+            "Nội dung phải bao gồm: danh sách các bên liên quan, danh sách tài sản, danh sách rủi ro. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Stakeholder_Identification_List.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `identification_list`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Stakeholder_Identification_List.docx` chứa danh sách nhận diện, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `identification_list`."
+        ),
+        callback=lambda output: create_docx(
+            "Danh sách nhận diện các bên liên quan",
+            [
+                "1. Danh sách các bên liên quan: Tên, chức danh, vai trò, mức độ quyền lực, quan tâm, ảnh hưởng (lấy từ project_charter).",
+                "2. Phân tích kỳ vọng: Kỳ vọng và mức độ cam kết của các bên liên quan.",
+                "3. Chiến lược thu hút: Cách tiếp cận để quản lý và thu hút sự tham gia.",
+                "4. Danh sách tài sản: Các tài sản liên quan đến dự án.",
+                "5. Danh sách rủi ro: Các rủi ro chính được nhận diện ban đầu.",
+                shared_memory.load("project_charter") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Stakeholder_Identification_List.docx"
+        ) and shared_memory.save("identification_list", output)
+    )
+
+    # Tác vụ tạo Project Resource Plan
+    project_resource_plan_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Kế hoạch tài nguyên dự án (Project Resource Plan) dựa trên dữ liệu từ `project_charter` và `project_team_definition` trong SharedMemory. "
+            "Tài liệu này là nguồn tổng hợp trung tâm để xác định tất cả nguồn lực cần thiết cho dự án: kích thước nhóm, loại nguồn lực, nhu cầu về cơ sở vật chất, tổ chức nhóm, các giả định, rủi ro và biện pháp giảm thiểu. "
+            "Nội dung phải bao gồm: kích thước nhóm dự án, các nguồn lực/kỹ năng cần thiết, nguồn nhân sự, số lượng, nhu cầu cơ sở vật chất (loại, thời gian, số lượng), hồ sơ nguồn lực (loại, nguồn, chi phí theo giờ, giờ theo tháng, tổng giờ, tổng chi phí), tổ chức nhóm, giả định, rủi ro và biện pháp giảm thiểu, phê duyệt từ các bên liên quan. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Project_Resource_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `project_resource_plan`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Project_Resource_Plan.docx` chứa kế hoạch tài nguyên, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `project_resource_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch tài nguyên dự án",
+            [
+                "1. Danh sách tài nguyên: Nhân sự, thiết bị, và công nghệ cần thiết (lấy từ project_charter và project_team_definition).",
+                "2. Kế hoạch phân bổ: Cách thức và thời điểm phân bổ tài nguyên.",
+                "3. Lịch trình sử dụng tài nguyên: Thời gian sử dụng từng loại tài nguyên.",
+                "4. Rủi ro tài nguyên: Các rủi ro liên quan đến tài nguyên và chiến lược giảm thiểu.",
+                shared_memory.load("project_charter") or "Không có dữ liệu",
+                shared_memory.load("project_team_definition") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Project_Resource_Plan.docx"
+        ) and shared_memory.save("project_resource_plan", output)
+    )
+
+    # Tác vụ tạo Concept Of Operations
+    concept_of_operations_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Khái niệm vận hành (Concept Of Operations) dựa trên dữ liệu từ `project_charter` và `business_case` trong SharedMemory. "
+            "CONOPS là tài liệu phân tích nhu cầu về năng lực và mô tả ở mức cao về các yêu cầu nhằm đạt được mục tiêu của tổ chức CNTT và các đơn vị trực thuộc, làm công cụ giao tiếp giữa khách hàng nội bộ và nhóm phát triển để mô tả rõ nhu cầu kinh doanh. "
+            "Nó được dùng để đánh giá nhu cầu, đề xuất hệ thống mới, hỗ trợ lập Business Case và tài liệu yêu cầu kinh doanh (BRD). "
+            "Nội dung phải bao gồm: nhu cầu năng lực, mô tả vận hành và hỗ trợ, cơ sở thay đổi, tác động tiềm năng, kịch bản vận hành, tính năng chức năng, tóm tắt và phân tích hệ thống đề xuất, quy trình vận hành, vai trò và trách nhiệm, rủi ro vận hành. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Concept_Of_Operations.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `concept_of_operations`."
+        ),
+        agent=initiation_agent,
+        expected_output=(
+            "Tài liệu `Concept_Of_Operations.docx` chứa khái niệm vận hành, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `concept_of_operations`."
+        ),
+        callback=lambda output: create_docx(
+            "Khái niệm vận hành",
+            [
+                "1. Mô tả hệ thống: Tổng quan về hệ thống hoặc sản phẩm của dự án (lấy từ project_charter).",
+                "2. Quy trình vận hành: Các quy trình chính để vận hành dự án (lấy từ business_case).",
+                "3. Vai trò và trách nhiệm: Các vai trò vận hành chính.",
+                "4. Rủi ro vận hành: Các rủi ro tiềm ẩn và chiến lược giảm thiểu.",
+                shared_memory.load("project_charter") or "Không có dữ liệu",
+                shared_memory.load("business_case") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Concept_Of_Operations.docx"
+        ) and shared_memory.save("concept_of_operations", output)
+    )
+
+    # Tác vụ tạo Initiate Project Checklist
+    initiate_project_checklist_task = Task(
+        description=(
+            "Sử dụng công cụ `create_project_document` để tạo tài liệu Danh sách kiểm tra khởi tạo dự án (Initiate Project Checklist) dựa trên dữ liệu từ `project_charter` và `business_case` trong SharedMemory. "
+            "Danh sách kiểm tra các mục tiêu và nhiệm vụ chính trong Giai đoạn Khởi tạo Dự án (Project Concept / Initiation Phase), xác minh rằng các chức năng bắt buộc đã được hoàn thành. "
+            "Nội dung phải bao gồm: mục tiêu dự án, vòng đời phát triển hệ thống, kiểm tra từng hạng mục (tuyên bố sứ mệnh, đánh giá cơ hội, trường hợp kinh doanh, tính khả thi, Project Charter, phê duyệt), danh sách công việc, trạng thái hoàn thành, người chịu trách nhiệm, ghi chú. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Initiate_Project_Checklist.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `initiate_project_checklist`."
+        ),
         agent=project_manager_agent,
-        context=[initiation_tasks],
-        callback=phase_req_analysis_tasks_callback
+        expected_output=(
+            "Tài liệu `Initiate_Project_Checklist.docx` chứa danh sách kiểm tra khởi tạo, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `initiate_project_checklist`."
+        ),
+        callback=lambda output: create_docx(
+            "Danh sách kiểm tra khởi tạo dự án",
+            [
+                "1. Danh sách công việc: Các bước cần hoàn thành để khởi tạo dự án (lấy từ project_charter và business_case).",
+                "2. Trạng thái hoàn thành: Hoàn thành, đang thực hiện, hoặc chưa bắt đầu.",
+                "3. Người chịu trách nhiệm: Danh sách người phụ trách từng công việc.",
+                "4. Ghi chú: Các thông tin bổ sung hoặc vấn đề cần lưu ý.",
+                shared_memory.load("project_charter") or "Không có dữ liệu",
+                shared_memory.load("business_case") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/0_initiation/Initiate_Project_Checklist.docx"
+        ) and shared_memory.save("initiate_project_checklist", output)
     )
 
-    def research_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'research_tasks' ---")
-        best_practices_match = re.search(r'```best_practices_report\s*([\s\S]*?)\s*```', str(output))
-        ieee_uml_match = re.search(r'```ieee_uml_guidelines\s*([\s\S]*?)\s*```', str(output))
-        architecture_references_match = re.search(r'```architecture_references\s*([\s\S]*?)\s*```', str(output))
-        template_library_match = re.search(r'```template_library_update\s*([\s\S]*?)\s*```', str(output))
-        if best_practices_match:
-            filepath = os.path.join(phase_output_dir, "Best_Practices_Report.md")
-            write_output(filepath, best_practices_match.group(1))
-            shared_memory.set("phase_0_initiation", "best_practices_report_path", filepath)
-            logging.info(f"Đã lưu Best_Practices_Report.md.")
-        else:
-            logging.warning("Không tìm thấy nội dung Best Practices Report.")
-        if ieee_uml_match:
-            filepath = os.path.join(phase_output_dir, "IEEE_UML_Guidelines.md")
-            write_output(filepath, ieee_uml_match.group(1))
-            shared_memory.set("phase_0_initiation", "ieee_uml_guidelines_path", filepath)
-            logging.info(f"Đã lưu IEEE_UML_Guidelines.md.")
-        else:
-            logging.warning("Không tìm thấy nội dung IEEE UML Guidelines.")
-        if architecture_references_match:
-            filepath = os.path.join(phase_output_dir, "Architecture_References.md")
-            write_output(filepath, architecture_references_match.group(1))
-            shared_memory.set("phase_0_initiation", "architecture_references_path", filepath)
-            logging.info(f"Đã lưu Architecture_References.md.")
-        else:
-            logging.warning("Không tìm thấy nội dung Architecture References.")
-        if template_library_match:
-            filepath = os.path.join(phase_output_dir, "Template_Library_Update.md")
-            write_output(filepath, template_library_match.group(1))
-            shared_memory.set("phase_0_initiation", "template_library_update_path", filepath)
-            logging.info(f"Đã lưu Template_Library_Update.md.")
-        else:
-            logging.warning("Không tìm thấy nội dung Template Library Update.")
-
-    research_tasks = Task(
-        description=dedent(f"""
-            Là {getattr(researcher_agent, 'role', 'Nhà Nghiên cứu')}, bạn hãy thực hiện nghiên cứu chuyên sâu về các thực hành tốt nhất
-            và tiêu chuẩn ngành (ví dụ: IEEE cho UML, các nguyên tắc kiến trúc phần mềm) liên quan đến dự án và giai đoạn khởi tạo.
-            Đồng thời, xác định và tóm tắt các tài liệu tham khảo kiến trúc quan trọng và đề xuất các cập nhật
-            cho thư viện mẫu nếu có.
-            Output của bạn phải chứa 4 phần riêng biệt, mỗi phần được bao bọc bởi các tag độc đáo:
-            ```best_practices_report
-            [Nội dung báo cáo thực hành tốt nhất]
-            ```
-            ```ieee_uml_guidelines
-            [Mô tả các hướng dẫn IEEE/UML chính]
-            ```
-            ```architecture_references
-            [Mô tả các tài liệu/nguồn tham khảo kiến trúc quan trọng]
-            ```
-            ```template_library_update
-            [Đề xuất cập nhật thư viện mẫu]
-            ```
-            --- Context:
-            Từ khóa Truy vấn: {shared_memory.get('phase_0_initiation', 'query_keywords_path') or 'N/A'}
-            Yêu cầu Cụ thể Giai đoạn Khởi tạo: {shared_memory.get('phase_0_initiation', 'phase_specific_requirements_path') or 'N/A'}
-        """),
-        expected_output="4 tài liệu tiếng Việt: 'Best_Practices_Report.md', 'IEEE_UML_Guidelines.md', 'Architecture_References.md', 'Template_Library_Update.md'.",
-        agent=researcher_agent,
-        context=[keyword_generation_tasks, phase_req_analysis_tasks],
-        callback=research_tasks_callback
-    )
-
-    def stakeholder_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'stakeholder_tasks' ---")
-        stakeholder_list_match = re.search(r'```stakeholder_list\s*([\s\S]*?)\s*```', str(output))
-        stakeholder_analysis_match = re.search(r'```stakeholder_analysis\s*([\s\S]*?)\s*```', str(output))
-        project_submission_form_match = re.search(r'```project_submission_form\s*([\s\S]*?)\s*```', str(output))
-        if stakeholder_list_match:
-            process_and_save_xlsx(stakeholder_list_match.group(1), os.path.join(phase_output_dir, "Stakeholder_List.xlsx"), "Danh sách Bên liên quan")
-            shared_memory.set("phase_0_initiation", "stakeholder_list_path", os.path.join(phase_output_dir, "Stakeholder_List.xlsx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Stakeholder List.")
-        if stakeholder_analysis_match:
-            filepath = os.path.join(phase_output_dir, "Stakeholder_Analysis.md")
-            write_output(filepath, stakeholder_analysis_match.group(1))
-            shared_memory.set("phase_0_initiation", "stakeholder_analysis_path", filepath)
-            logging.info(f"Đã lưu Stakeholder_Analysis.md.")
-        else:
-            logging.warning("Không tìm thấy nội dung Stakeholder Analysis.")
-        if project_submission_form_match:
-            process_and_save_docx(project_submission_form_match.group(1), os.path.join(phase_output_dir, "Project_Submission_Form.docx"), "Biểu mẫu Nộp Dự án")
-            shared_memory.set("phase_0_initiation", "project_submission_form_path", os.path.join(phase_output_dir, "Project_Submission_Form.docx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Project Submission Form.")
-
-    stakeholder_tasks = Task(
-        description=dedent(f"""
-            Là {getattr(initiation_agent, 'role', 'Chuyên gia Khởi tạo')}, bạn hãy xác định và phân tích các bên liên quan chính của dự án.
-            Tạo một danh sách các bên liên quan (Stakeholder List) ở định dạng bảng (phù hợp cho Excel),
-            thực hiện phân tích các bên liên quan (Stakeholder Analysis) bao gồm mối quan tâm, mức độ ảnh hưởng của họ.
-            Đồng thời, tạo một biểu mẫu nộp dự án (Project Submission Form) cơ bản.
-            Output của bạn phải chứa 3 phần riêng biệt, mỗi phần được bao bọc bởi các tag độc đáo:
-            ```stakeholder_list
-            [Nội dung danh sách bên liên quan (định dạng bảng)]
-            ```
-            ```stakeholder_analysis
-            [Nội dung phân tích bên liên quan]
-            ```
-            ```project_submission_form
-            [Nội dung biểu mẫu nộp dự án]
-            ```
-            --- Context:
-            Điều lệ Dự án: {shared_memory.get('phase_0_initiation', 'project_charter_path') or 'N/A'}
-        """),
-        expected_output="3 tài liệu tiếng Việt: 'Stakeholder_List.xlsx', 'Stakeholder_Analysis.md', 'Project_Submission_Form.docx'.",
-        agent=initiation_agent,
-        context=[initiation_tasks],
-        callback=stakeholder_tasks_callback
-    )
-
-    def resourcing_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'resourcing_tasks' ---")
-        team_definition_match = re.search(r'```project_team_definition\s*([\s\S]*?)\s*```', str(output))
-        resource_plan_match = re.search(r'```project_resource_plan\s*([\s\S]*?)\s*```', str(output))
-        if team_definition_match:
-            process_and_save_docx(team_definition_match.group(1), os.path.join(phase_output_dir, "Project_Team_Definition.docx"), "Định nghĩa Đội ngũ Dự án")
-            shared_memory.set("phase_0_initiation", "project_team_definition_path", os.path.join(phase_output_dir, "Project_Team_Definition.docx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Project Team Definition.")
-        if resource_plan_match:
-            process_and_save_xlsx(resource_plan_match.group(1), os.path.join(phase_output_dir, "Project_Resource_Plan.xlsx"), "Kế hoạch Nguồn lực")
-            shared_memory.set("phase_0_initiation", "project_resource_plan_path", os.path.join(phase_output_dir, "Project_Resource_Plan.xlsx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Project Resource Plan.")
-
-    resourcing_tasks = Task(
-        description=dedent(f"""
-            Là {getattr(initiation_agent, 'role', 'Chuyên gia Khởi tạo')}, bạn hãy lập kế hoạch ban đầu về nguồn lực và đội ngũ cần thiết cho dự án.
-            Tạo một tài liệu định nghĩa đội ngũ dự án (Project Team Definition) phác thảo các vai trò, trách nhiệm chính.
-            Tạo một kế hoạch nguồn lực dự án (Project Resource Plan) ở định dạng bảng (phù hợp cho Excel)
-            liệt kê các loại nguồn lực cần thiết (nhân sự, công cụ, v.v.) và ước tính sơ bộ.
-            Output của bạn phải chứa 2 phần riêng biệt, mỗi phần được bao bọc bởi các tag độc đáo:
-            ```project_team_definition
-            [Nội dung định nghĩa đội ngũ]
-            ```
-            ```project_resource_plan
-            [Nội dung kế hoạch nguồn lực (định dạng bảng)]
-            ```
-            --- Context:
-            Danh sách Bên liên quan: {shared_memory.get('phase_0_initiation', 'stakeholder_list_path') or 'N/A'}
-        """),
-        expected_output="2 tài liệu tiếng Việt: 'Project_Team_Definition.docx', 'Project_Resource_Plan.xlsx'.",
-        agent=initiation_agent,
-        context=[stakeholder_tasks],
-        callback=resourcing_tasks_callback
-    )
-
-    def conops_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'conops_tasks' ---")
-        filepath = os.path.join(phase_output_dir, "Concept_of_Operations.docx")
-        process_and_save_docx(str(output), filepath, "Khái niệm Vận hành (ConOps)")
-        shared_memory.set("phase_0_initiation", "concept_of_operations_path", filepath)
-        logging.info(f"Đã lưu Concept_of_Operations.docx và cập nhật shared_memory.")
-
-    conops_tasks = Task(
-        description=dedent(f"""
-            Là {getattr(initiation_agent, 'role', 'Chuyên gia Khởi tạo')}, bạn hãy phát triển một tài liệu Khái niệm Vận hành (Concept of Operations - ConOps) sơ bộ.
-            Tài liệu này nên mô tả cách hệ thống sẽ được sử dụng từ góc độ người dùng,
-            các kịch bản hoạt động chính, và môi trường hoạt động dự kiến.
-            Output là một tài liệu Word chuyên nghiệp và rõ ràng.
-            --- Context:
-            Trường hợp Kinh doanh: {shared_memory.get('phase_0_initiation', 'business_case_path') or 'N/A'}
-        """),
-        expected_output="Tài liệu tiếng Việt 'Concept_of_Operations.docx' mô tả khái niệm vận hành của hệ thống.",
-        agent=initiation_agent,
-        context=[initiation_tasks],
-        callback=conops_tasks_callback
-    )
-
-    def risk_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'risk_tasks' ---")
-        risk_assessment_match = re.search(r'```risk_assessment\s*([\s\S]*?)\s*```', str(output))
-        checklist_match = re.search(r'```initiate_project_checklist\s*([\s\S]*?)\s*```', str(output))
-        if risk_assessment_match:
-            filepath = os.path.join(phase_output_dir, "Risk_Assessment_Document.md")
-            write_output(filepath, risk_assessment_match.group(1))
-            shared_memory.set("phase_0_initiation", "risk_assessment_document_path", filepath)
-            logging.info(f"Đã lưu Risk_Assessment_Document.md.")
-        else:
-            logging.warning("Không tìm thấy nội dung Risk Assessment.")
-        if checklist_match:
-            process_and_save_xlsx(checklist_match.group(1), os.path.join(phase_output_dir, "Initiate_Project_Checklist.xlsx"), "Danh sách Kiểm tra Khởi tạo")
-            shared_memory.set("phase_0_initiation", "initiate_project_checklist_path", os.path.join(phase_output_dir, "Initiate_Project_Checklist.xlsx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Initiate Project Checklist.")
-
-    risk_tasks = Task(
-        description=dedent(f"""
-            Là {getattr(initiation_agent, 'role', 'Chuyên gia Khởi tạo')}, bạn hãy tiến hành đánh giá rủi ro sơ bộ cho dự án.
-            Xác định các rủi ro tiềm ẩn, phân tích tác động và khả năng xảy ra của chúng.
-            Tạo một tài liệu đánh giá rủi ro (Risk Assessment Document) chi tiết.
-            Đồng thời, tạo một danh sách kiểm tra khởi tạo dự án (Initiate Project Checklist) cơ bản
-            để đảm bảo tất cả các bước quan trọng đã được hoàn thành.
-            Output của bạn phải chứa 2 phần riêng biệt, mỗi phần được bao bọc bởi các tag độc đáo:
-            ```risk_assessment
-            [Nội dung đánh giá rủi ro]
-            ```
-            ```initiate_project_checklist
-            [Nội dung danh sách kiểm tra (định dạng bảng)]
-            ```
-            --- Context:
-            Báo cáo Khả thi: {shared_memory.get('phase_0_initiation', 'feasibility_report_path') or 'N/A'}
-            Khái niệm Vận hành (ConOps): {shared_memory.get('phase_0_initiation', 'concept_of_operations_path') or 'N/A'}
-        """),
-        expected_output="2 tài liệu tiếng Việt: 'Risk_Assessment_Document.md', 'Initiate_Project_Checklist.xlsx'.",
-        agent=initiation_agent,
-        context=[initiation_tasks, conops_tasks],
-        callback=risk_tasks_callback
-    )
-
-    def estimate_tasks_callback(output):
-        logging.info(f"--- Hoàn thành Task 'estimate_tasks' ---")
-        prelim_schedule_match = re.search(r'```preliminary_schedule\s*([\s\S]*?)\s*```', str(output))
-        budget_estimate_match = re.search(r'```budget_estimate\s*([\s\S]*?)\s*```', str(output))
-        cost_benefit_analysis_match = re.search(r'```cost_benefit_analysis\s*([\s\S]*?)\s*```', str(output))
-        if prelim_schedule_match:
-            process_and_save_xlsx(prelim_schedule_match.group(1), os.path.join(phase_output_dir, "Preliminary_Schedule.xlsx"), "Lịch trình Sơ bộ")
-            shared_memory.set("phase_0_initiation", "preliminary_schedule_path", os.path.join(phase_output_dir, "Preliminary_Schedule.xlsx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Preliminary Schedule.")
-        if budget_estimate_match:
-            process_and_save_xlsx(budget_estimate_match.group(1), os.path.join(phase_output_dir, "Budget_Estimate.xlsx"), "Ước tính Ngân sách")
-            shared_memory.set("phase_0_initiation", "budget_estimate_path", os.path.join(phase_output_dir, "Budget_Estimate.xlsx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Budget Estimate.")
-        if cost_benefit_analysis_match:
-            process_and_save_docx(cost_benefit_analysis_match.group(1), os.path.join(phase_output_dir, "Cost_Benefit_Analysis.docx"), "Phân tích Chi phí-Lợi ích")
-            shared_memory.set("phase_0_initiation", "cost_benefit_analysis_path", os.path.join(phase_output_dir, "Cost_Benefit_Analysis.docx"))
-        else:
-            logging.warning("Không tìm thấy nội dung Cost Benefit Analysis.")
-
-    estimate_tasks = Task(
-        description=dedent(f"""
-            Là {getattr(initiation_agent, 'role', 'Chuyên gia Khởi tạo')}, bạn hãy tạo các ước tính ban đầu về lịch trình và ngân sách cho dự án.
-            Phát triển một lịch trình sơ bộ (Preliminary Schedule) ở định dạng bảng (phù hợp cho Excel)
-            với các mốc quan trọng và ước tính thời gian.
-            Tạo một ước tính ngân sách (Budget Estimate) ở định dạng bảng (phù hợp cho Excel)
-            bao gồm các hạng mục chi phí chính.
-            Thực hiện phân tích chi phí-lợi ích (Cost-Benefit Analysis) để hỗ trợ quyết định.
-            Output của bạn phải chứa 3 phần riêng biệt, mỗi phần được bao bọc bởi các tag độc đáo:
-            ```preliminary_schedule
-            [Nội dung lịch trình sơ bộ (định dạng bảng)]
-            ```
-            ```budget_estimate
-            [Nội dung ước tính ngân sách (định dạng bảng)]
-            ```
-            ```cost_benefit_analysis
-            [Nội dung phân tích chi phí-lợi ích]
-            ```
-            --- Context:
-            Điều lệ Dự án: {shared_memory.get('phase_0_initiation', 'project_charter_path') or 'N/A'}
-            Đánh giá Rủi ro: {shared_memory.get('phase_0_initiation', 'risk_assessment_document_path') or 'N/A'}
-        """),
-        expected_output="3 tài liệu tiếng Việt: 'Preliminary_Schedule.xlsx', 'Budget_Estimate.xlsx', 'Cost_Benefit_Analysis.docx'.",
-        agent=initiation_agent,
-        context=[initiation_tasks, risk_tasks],
-        callback=estimate_tasks_callback
-    )
-
-    def quality_gate_initiation_task_callback(output):
-        logging.info(f"--- Hoàn thành Project Initiation Validation Task ---")
-        filepath = os.path.join(phase_output_dir, "Validation_Report_Phase_0.md")
-        write_output(filepath, str(output))
-        shared_memory.set("phase_0_initiation", "validation_report_path", filepath)
-        logging.info(f"Đã lưu Validation_Report_Phase_0.md và cập nhật shared_memory.")
-
-    quality_gate_initiation_task = Task(
-        description=dedent(f"""
-            Là Project Manager, bạn hãy thực hiện kiểm tra chất lượng (Quality Gate) cho Giai đoạn Khởi tạo (Phase 0).
-            Đánh giá kỹ lưỡng tất cả các deliverables đã tạo ra trong giai đoạn này:
-            - Project_Charter.docx
-            - Business_Case.docx
-            - Feasibility_Report.docx
-            - Query_Keywords.txt
-            - Phase_Specific_Requirements.docx
-            - Best_Practices_Report.md
-            - IEEE_UML_Guidelines.md
-            - Architecture_References.md
-            - Template_Library_Update.md
-            - Stakeholder_List.xlsx
-            - Stakeholder_Analysis.md
-            - Project_Submission_Form.docx
-            - Project_Team_Definition.docx
-            - Project_Resource_Plan.xlsx
-            - Concept_of_Operations.docx
-            - Risk_Assessment_Document.md
-            - Initiate_Project_Checklist.xlsx
-            - Preliminary_Schedule.xlsx
-            - Budget_Estimate.xlsx
-            - Cost_Benefit_Analysis.docx
-            Kiểm tra tính đầy đủ, chính xác, nhất quán và sự phù hợp với mục tiêu dự án ban đầu và yêu cầu người dùng.
-            Tạo một báo cáo 'Validation_Report_Phase_0.md' tóm tắt kết quả đánh giá.
-            Báo cáo này cần nêu rõ các điểm mạnh, các điểm cần cải thiện (nếu có), và xác nhận xem
-            giai đoạn Khởi tạo đã hoàn thành đạt yêu cầu để chuyển sang giai đoạn tiếp theo hay chưa.
-            --- Context:
-            Yêu cầu Người dùng Ban đầu: {shared_memory.get('phase_0_initiation', 'system_request_summary') or 'N/A'}
-        """),
-        expected_output="Tài liệu tiếng Việt 'Validation_Report_Phase_0.md' tóm tắt kết quả đánh giá giai đoạn khởi tạo.",
+    # Tác vụ xác thực tài liệu
+    validate_documents_task = Task(
+        description=(
+            "Sử dụng công cụ `validate_documents` để kiểm tra và xác thực tất cả các tài liệu khởi tạo (Best Practices, Project Initiation Agenda, Project Charter, Business Case, Feasibility Study, "
+            "Value Proposition Template, Project or Issue Submission Form, Project Cost - Benefit Analysis, Project Team Definition, Stakeholder Identification List, Project Resource Plan, Concept Of Operations, Initiate Project Checklist). "
+            "Đánh giá tính đầy đủ, chính xác, và phù hợp với các tiêu chuẩn quản lý dự án như PMI hoặc PRINCE2. "
+            "Tạo báo cáo xác thực chi tiết, nêu rõ trạng thái của từng tài liệu (đạt, cần chỉnh sửa, không đạt) và đưa ra các khuyến nghị cải thiện nếu cần. "
+            "Lưu báo cáo dưới dạng `.docx` và `.xlsx` trong thư mục `output/0_initiation` với tên `Validation_Report.docx` và `Validation_Report.xlsx`. "
+            "Lưu kết quả vào SharedMemory với khóa `validation_report`."
+        ),
         agent=project_manager_agent,
-        context=[
-            initiation_tasks,
-            keyword_generation_tasks,
-            phase_req_analysis_tasks,
-            research_tasks,
-            stakeholder_tasks,
-            resourcing_tasks,
-            conops_tasks,
-            risk_tasks,
-            estimate_tasks
-        ],
-        callback=quality_gate_initiation_task_callback
+        expected_output=(
+            "Báo cáo xác thực `Validation_Report.docx` và `Validation_Report.xlsx` chứa trạng thái và khuyến nghị cho các tài liệu, "
+            "được lưu trong `output/0_initiation` và SharedMemory với khóa `validation_report`."
+        ),
+        callback=lambda output: (
+            create_docx(
+                "Báo cáo xác thực tài liệu",
+                [
+                    "1. Tóm tắt: Tổng quan về trạng thái xác thực của các tài liệu.",
+                    "2. Trạng thái từng tài liệu: Best Practices, Project Initiation Agenda, Project Charter, Business Case, Feasibility Study, Value Proposition Template, Project or Issue Submission Form, Project Cost - Benefit Analysis, Project Team Definition, Stakeholder Identification List, Project Resource Plan, Concept Of Operations, Initiate Project Checklist.",
+                    "3. Khuyến nghị: Các cải tiến cần thiết cho từng tài liệu (nếu có).",
+                    "4. Kết luận: Đánh giá tổng thể về chất lượng tài liệu."
+                ],
+                f"{output_base_dir}/0_initiation/Validation_Report.docx"
+            ) and
+            create_xlsx(
+                [
+                    ["Document", "Status", "Recommendations"],
+                    ["Best Practices", "TBD", "TBD"],
+                    ["Project Initiation Agenda", "TBD", "TBD"],
+                    ["Project Charter", "TBD", "TBD"],
+                    ["Business Case", "TBD", "TBD"],
+                    ["Feasibility Study", "TBD", "TBD"],
+                    ["Value Proposition Template", "TBD", "TBD"],
+                    ["Project or Issue Submission Form", "TBD", "TBD"],
+                    ["Project Cost - Benefit Analysis", "TBD", "TBD"],
+                    ["Project Team Definition", "TBD", "TBD"],
+                    ["Stakeholder Identification List", "TBD", "TBD"],
+                    ["Project Resource Plan", "TBD", "TBD"],
+                    ["Concept Of Operations", "TBD", "TBD"],
+                    ["Initiate Project Checklist", "TBD", "TBD"]
+                ],
+                f"{output_base_dir}/0_initiation/Validation_Report.xlsx"
+            ) and
+            shared_memory.save("validation_report", output)
+        )
     )
 
-    return [
-        initiation_tasks,
-        keyword_generation_tasks,
-        phase_req_analysis_tasks,
-        research_tasks,
-        stakeholder_tasks,
-        resourcing_tasks,
-        conops_tasks,
-        risk_tasks,
-        estimate_tasks,
-        quality_gate_initiation_task
-    ]
+    tasks.extend([
+        best_practices_task,
+        project_initiation_agenda_task,
+        project_charter_task,
+        business_case_task,
+        feasibility_study_task,
+        value_proposition_task,
+        submission_form_task,
+        cost_benefit_analysis_task,
+        project_team_definition_task,
+        identification_list_task,
+        project_resource_plan_task,
+        concept_of_operations_task,
+        initiate_project_checklist_task,
+        validate_documents_task
+    ])
+
+    return tasks

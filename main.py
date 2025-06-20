@@ -1,26 +1,22 @@
 import os
-import logging
-import sys
+from crewai import Crew, Process
+from memory.shared_memory import SharedMemory
 
-from crewai import Crew, Process, Task
-
-from bootstrap import initialize_environment
-from memory.shared_memory import shared_memory
-from utils.file_writer import write_output
-
-from agents.initiation_agent import create_initiation_agent
-from agents.planning_agent import create_planning_agent
-from agents.requirement_agent import create_requirement_agent
-from agents.design_agent import create_design_agent
-from agents.development_agent import create_development_agent
-from agents.testing_agent import create_testing_agent
-from agents.deployment_agent import create_deployment_agent
-from agents.maintenance_agent import create_maintenance_agent
+# Import agents for all phases
+from agents.input_agent import create_input_agent
 from agents.researcher_agent import create_researcher_agent
 from agents.project_manager_agent import create_project_manager_agent
-from agents.input_agent import create_input_agent
+from agents.initiation_agents import create_initiation_agent
+from agents.planning_agents import create_planning_agent
+from agents.requirement_agents import create_requirement_agent
+from agents.design_agents import create_design_agent
+from agents.development_agents import create_development_agent
+from agents.testing_agents import create_testing_agent
+from agents.deployment_agents import create_deployment_agent
+from agents.maintenance_agents import create_maintenance_agent
 
-from tasks.input_tasks import run_input_collection_conversation
+# Import tasks for all phases
+from tasks.input_tasks import create_input_tasks
 from tasks.initiation_tasks import create_initiation_tasks
 from tasks.planning_tasks import create_planning_tasks
 from tasks.requirement_tasks import create_requirement_tasks
@@ -29,156 +25,136 @@ from tasks.development_tasks import create_development_tasks
 from tasks.testing_tasks import create_testing_tasks
 from tasks.deployment_tasks import create_deployment_tasks
 from tasks.maintenance_tasks import create_maintenance_tasks
-from tasks.research_tasks import create_research_task
-from tasks.quality_gate_tasks import create_quality_gate_task
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def main():
+    INPUT_BASE_DIR = "input"
+    OUTPUT_BASE_DIR = "output"
+    shared_memory = SharedMemory()
 
-OUTPUT_BASE_DIR = "output"
-INPUT_BASE_DIR = os.path.join(os.path.dirname(OUTPUT_BASE_DIR), "input")
+    # Create agents
+    input_agent = create_input_agent(INPUT_BASE_DIR)
+    researcher_agent = create_researcher_agent(OUTPUT_BASE_DIR)
+    project_manager_agent = create_project_manager_agent(OUTPUT_BASE_DIR)
+    initiation_agent = create_initiation_agent(OUTPUT_BASE_DIR)
+    planning_agent = create_planning_agent(OUTPUT_BASE_DIR)
+    requirement_agent = create_requirement_agent(OUTPUT_BASE_DIR)
+    design_agent = create_design_agent(OUTPUT_BASE_DIR)
+    development_agent = create_development_agent(OUTPUT_BASE_DIR)
+    testing_agent = create_testing_agent(OUTPUT_BASE_DIR)
+    deployment_agent = create_deployment_agent(OUTPUT_BASE_DIR)
+    maintenance_agent = create_maintenance_agent(OUTPUT_BASE_DIR)
 
-def run_project_crew():
-    """
-    Chạy toàn bộ quy trình phát triển dự án phần mềm qua các giai đoạn.
-    Mỗi giai đoạn được đại diện bởi một Crew riêng.
-    """
-    logging.info("Bắt đầu quy trình Project Crew.")
+    # ---
 
-    os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
-    os.makedirs(INPUT_BASE_DIR, exist_ok=True)
-
-    # ----------------------------------------------------
-    # GIAI ĐOẠN 0: KHỞI TẠO DỰ ÁN VÀ THU THẬP YÊU CẦU BAN ĐẦU
-    # ----------------------------------------------------
-    logging.info("--- Bắt đầu Giai đoạn 0: Khởi tạo và Thu thập Yêu cầu Ban đầu ---")
-
-    input_agent = create_input_agent()
-    initiation_agent = create_initiation_agent()
-    project_manager_agent = create_project_manager_agent()
-    researcher_agent = create_researcher_agent()
-
-    logging.info("Bắt đầu thu thập yêu cầu tương tác từ người dùng...")
-    run_input_collection_conversation(input_agent, INPUT_BASE_DIR)
-    
-    system_request_summary = shared_memory.get('phase_0_initiation', 'system_request_summary')
-    if not system_request_summary:
-        logging.error("Không tìm thấy system_request_summary trong shared_memory. Kết thúc quy trình.")
-        sys.exit(1)
-    logging.info("Yêu cầu ban đầu đã được thu thập và lưu vào shared_memory.")
-
-    initiation_tasks_list = create_initiation_tasks(
-        project_manager_agent,
-        researcher_agent,
-        initiation_agent,
-        OUTPUT_BASE_DIR
+    ## Giai đoạn 0: Thu thập yêu cầu ban đầu (Input)
+    # Đây là giai đoạn tương tác trực tiếp với người dùng để hiểu ý tưởng ban đầu
+    input_tasks = create_input_tasks(shared_memory, INPUT_BASE_DIR, input_agent)
+    input_crew = Crew(
+        agents=[input_agent], # Chỉ cần Input Agent cho task này để đảm bảo tính tập trung
+        tasks=input_tasks,
+        process=Process.sequential,
+        verbose=True # Nên để verbose=True ở đây để thấy tương tác của Agent
     )
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 0: THU THẬP YÊU CẦU BAN ĐẦU #####")
+    input_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 0: THU THẬP YÊU CẦU BAN ĐẦU #####\n")
 
+    # Giai đoạn 1: Khởi tạo (Initiation)
+    initiation_tasks = create_initiation_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, initiation_agent)
     initiation_crew = Crew(
-        agents=[project_manager_agent, researcher_agent, initiation_agent],
-        tasks=initiation_tasks_list,
+        agents=[input_agent, researcher_agent, project_manager_agent, initiation_agent],
+        tasks=initiation_tasks,
         process=Process.sequential,
         verbose=True
     )
-    logging.info("Đang chạy Initiation Crew...")
-    initiation_result = initiation_crew.kickoff()
-    logging.info("Hoàn thành Initiation Crew.")
-    print("\n\n#############################################")
-    print("## Initiation Crew Completed!              ##")
-    print("#############################################\n")
-    print(f"Initiation Result:\n{initiation_result}\n")
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 1: KHỞI TẠO #####")
+    initiation_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 1: KHỞI TẠO #####\n")
 
-    # Các giai đoạn khác giữ nguyên
-    logging.info("--- Bắt đầu Giai đoạn 1: Lập Kế hoạch Dự án ---")
-    planing_agent = create_planning_agent()
-    planning_tasks_list = create_planning_tasks(project_manager_agent, researcher_agent, planing_agent, OUTPUT_BASE_DIR)
-    planning_crew = Crew(agents=[project_manager_agent, researcher_agent, planing_agent], tasks=planning_tasks_list, process=Process.sequential, verbose=True)
-    logging.info("Đang chạy Planning Crew...")
-    planning_result = planning_crew.kickoff()
-    logging.info("Hoàn thành Planning Crew.")
-    print("\n\n#############################################")
-    print("## Planning Crew Completed!                ##")
-    print("#############################################\n")
-    print(f"Planning Result:\n{planning_result}\n")
+    # Giai đoạn 2: Lập kế hoạch (Planning)
+    planning_tasks = create_planning_tasks(shared_memory, OUTPUT_BASE_DIR, planning_agent) # Đảm bảo planning_agent được truyền vào nếu cần
+    planning_crew = Crew(
+        agents=[input_agent, researcher_agent, project_manager_agent, planning_agent],
+        tasks=planning_tasks,
+        process=Process.sequential, # Thay thế bằng Process.sequential hoặc Process.hierarchical
+        verbose=True
+    )
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 2: LẬP KẾ HOẠCH #####")
+    planning_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 2: LẬP KẾ HOẠCH #####\n")
 
-    logging.info("--- Bắt đầu Giai đoạn 2: Phân tích và Đặc tả Yêu cầu ---")
-    requirement_agent = create_requirement_agent()
-    requirement_tasks_list = create_requirement_tasks(requirement_agent, project_manager_agent, researcher_agent, OUTPUT_BASE_DIR)
-    requirement_crew = Crew(agents=[requirement_agent, project_manager_agent, researcher_agent], tasks=requirement_tasks_list, process=Process.sequential, verbose=True)
-    logging.info("Đang chạy Requirement Crew...")
-    requirement_result = requirement_crew.kickoff()
-    logging.info("Hoàn thành Requirement Crew.")
-    print("\n\n#############################################")
-    print("## Requirement Crew Completed!             ##")
-    print("#############################################\n")
-    print(f"Requirement Result:\n{requirement_result}\n")
+    # Giai đoạn 3: Yêu cầu (Requirement)
+    requirement_tasks = create_requirement_tasks(shared_memory, OUTPUT_BASE_DIR, requirement_agent) # Đảm bảo requirement_agent được truyền vào nếu cần
+    requirement_crew = Crew(
+        agents=[input_agent, researcher_agent, project_manager_agent, requirement_agent],
+        tasks=requirement_tasks,
+        process=Process.sequential,
+        verbose=True
+    )
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 3: YÊU CẦU #####")
+    requirement_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 3: YÊU CẦU #####\n")
 
-    logging.info("--- Bắt đầu Giai đoạn 3: Thiết kế Hệ thống ---")
-    design_agent = create_design_agent()
-    design_tasks_list = create_design_tasks(design_agent, project_manager_agent, researcher_agent, OUTPUT_BASE_DIR)
-    design_crew = Crew(agents=[design_agent, project_manager_agent, researcher_agent], tasks=design_tasks_list, process=Process.sequential, verbose=True)
-    logging.info("Đang chạy Design Crew...")
-    design_result = design_crew.kickoff()
-    logging.info("Hoàn thành Design Crew.")
-    print("\n\n#############################################")
-    print("## Design Crew Completed!                  ##")
-    print("#############################################\n")
-    print(f"Design Result:\n{design_result}\n")
+    # Giai đoạn 4: Thiết kế (Design)
+    design_tasks = create_design_tasks(shared_memory, OUTPUT_BASE_DIR, design_agent) # Đảm bảo design_agent được truyền vào nếu cần
+    design_crew = Crew(
+        agents=[input_agent, researcher_agent, project_manager_agent, design_agent],
+        tasks=design_tasks,
+        process=Process.sequential,
+        verbose=True
+    )
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 4: THIẾT KẾ #####")
+    design_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 4: THIẾT KẾ #####\n")
 
-    logging.info("--- Bắt đầu Giai đoạn 4: Phát triển và Triển khai Thử nghiệm ---")
-    development_agent = create_development_agent()
-    development_tasks_list = create_development_tasks(development_agent, project_manager_agent, OUTPUT_BASE_DIR)
-    development_crew = Crew(agents=[development_agent, project_manager_agent], tasks=development_tasks_list, process=Process.sequential, verbose=True)
-    logging.info("Đang chạy Development Crew...")
-    development_result = development_crew.kickoff()
-    logging.info("Hoàn thành Development Crew.")
-    print("\n\n#############################################")
-    print("## Development Crew Completed!             ##")
-    print("#############################################\n")
-    print(f"Development Result:\n{development_result}\n")
+    # Giai đoạn 5: Phát triển (Development)
+    development_tasks = create_development_tasks(shared_memory, OUTPUT_BASE_DIR, development_agent) # Đảm bảo development_agent được truyền vào nếu cần
+    development_crew = Crew(
+        agents=[input_agent, researcher_agent, project_manager_agent, development_agent],
+        tasks=development_tasks,
+        process=Process.sequential, 
+        verbose=True
+    )
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 5: PHÁT TRIỂN #####")
+    development_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 5: PHÁT TRIỂN #####\n")
 
-    logging.info("--- Bắt đầu Giai đoạn 5: Kiểm thử và Đảm bảo Chất lượng ---")
-    testing_agent = create_testing_agent()
-    testing_tasks_list = create_testing_tasks(testing_agent, project_manager_agent, OUTPUT_BASE_DIR)
-    testing_crew = Crew(agents=[testing_agent, project_manager_agent], tasks=testing_tasks_list, process=Process.sequential, verbose=True)
-    logging.info("Đang chạy Testing Crew...")
-    testing_result = testing_crew.kickoff()
-    logging.info("Hoàn thành Testing Crew.")
-    print("\n\n#############################################")
-    print("## Testing Crew Completed!                 ##")
-    print("#############################################\n")
-    print(f"Testing Result:\n{testing_result}\n")
+    # Giai đoạn 6: Kiểm thử (Testing)
+    testing_tasks = create_testing_tasks(shared_memory, OUTPUT_BASE_DIR, testing_agent) # Đảm bảo testing_agent được truyền vào nếu cần
+    testing_crew = Crew(
+        agents=[input_agent, researcher_agent, project_manager_agent, testing_agent],
+        tasks=testing_tasks,
+        process=Process.sequential,
+        verbose=True
+    )
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 6: KIỂM THỬ #####")
+    testing_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 6: KIỂM THỬ #####\n")
 
-    logging.info("--- Bắt đầu Giai đoạn 6: Triển khai và Giao nộp ---")
-    deployment_agent = create_deployment_agent()
-    deployment_tasks_list = create_deployment_tasks(deployment_agent, project_manager_agent, researcher_agent, OUTPUT_BASE_DIR)
-    deployment_crew = Crew(agents=[deployment_agent, project_manager_agent, researcher_agent], tasks=deployment_tasks_list, process=Process.sequential, verbose=True)
-    logging.info("Đang chạy Deployment Crew...")
-    deployment_result = deployment_crew.kickoff()
-    logging.info("Hoàn thành Deployment Crew.")
-    print("\n\n#############################################")
-    print("## Deployment Crew Completed!              ##")
-    print("#############################################\n")
-    print(f"Deployment Result:\n{deployment_result}\n")
+    # Giai đoạn 7: Triển khai (Deployment)
+    deployment_tasks = create_deployment_tasks(shared_memory, OUTPUT_BASE_DIR, deployment_agent) # Đảm bảo deployment_agent được truyền vào nếu cần
+    deployment_crew = Crew(
+        agents=[input_agent, researcher_agent, project_manager_agent, deployment_agent],
+        tasks=deployment_tasks,
+        process=Process.sequential, 
+        verbose=True
+    )
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 7: TRIỂN KHAI #####")
+    deployment_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 7: TRIỂN KHAI #####\n")
 
-    logging.info("--- Bắt đầu Giai đoạn 7: Bảo trì và Hỗ trợ ---")
-    site_reliability_engineer_agent = create_maintenance_agent()
-    maintenance_tasks_list = create_maintenance_tasks(site_reliability_engineer_agent, project_manager_agent, researcher_agent, OUTPUT_BASE_DIR)
-    maintenance_crew = Crew(agents=[site_reliability_engineer_agent, project_manager_agent, researcher_agent], tasks=maintenance_tasks_list, process=Process.sequential, verbose=True)
-    logging.info("Đang chạy Maintenance Crew...")
-    maintenance_result = maintenance_crew.kickoff()
-    logging.info("Hoàn thành Maintenance Crew.")
-    print("\n\n#############################################")
-    print("## Maintenance Crew Completed!             ##")
-    print("#############################################\n")
-    print(f"Maintenance Result:\n{maintenance_result}\n")
+    # Giai đoạn 8: Bảo trì (Maintenance)
+    maintenance_tasks = create_maintenance_tasks(shared_memory, OUTPUT_BASE_DIR, maintenance_agent) # Đảm bảo maintenance_agent được truyền vào nếu cần
+    maintenance_crew = Crew(
+        agents=[input_agent, researcher_agent, project_manager_agent, maintenance_agent],
+        tasks=maintenance_tasks,
+        process=Process.sequential,
+        verbose=True
+    )
+    print("\n##### BẮT ĐẦU GIAI ĐOẠN 8: BẢO TRÌ #####")
+    maintenance_crew.kickoff()
+    print("##### KẾT THÚC GIAI ĐOẠN 8: BẢO TRÌ #####\n")
 
-    logging.info("Quy trình Project Crew hoàn tất.")
-    return maintenance_result
 
 if __name__ == "__main__":
-    env_initialized = initialize_environment()
-    if not env_initialized:
-        logging.error("Ứng dụng không thể khởi động do lỗi môi trường. Vui lòng kiểm tra log.")
-        sys.exit(1)
-    final_project_summary = run_project_crew()
-    print(f"\n\nFINAL PROJECT SUMMARY:\n{final_project_summary}")
+    main()

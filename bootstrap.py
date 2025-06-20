@@ -1,38 +1,61 @@
-# bootstrap.py
-
 import os
-import logging
-from dotenv import load_dotenv
 
-# Cấu hình logging cơ bản cho file bootstrap
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def create_project_structure():
+    # Định nghĩa cấu trúc thư mục
+    directories = [
+        "agents",
+        "tasks",
+        "input",
+        "output/0_initiation",
+        "output/1_planning",
+        "output/2_requirements",
+        "output/3_design",
+        "output/4_development",
+        "output/5_testing",
+        "output/6_deployment",
+        "output/7_maintenance",
+        "memory",
+        "utils"
+    ]
 
-def initialize_environment():
-    """
-    Khởi tạo môi trường:
-    - Tải biến môi trường từ .env.
-    - Đảm bảo các thư mục output và input tồn tại.
-    """
-    logging.info("Đang khởi tạo môi trường...")
+    # Tạo các thư mục
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
 
-    # Tải biến môi trường từ .env file
-    load_dotenv()
-    logging.info("Đã tải biến môi trường từ .env")
+    # Danh sách các file và nội dung mẫu
+    files = {
+        "agents/input_agent.py": "# Agent để thu thập yêu cầu\n",
+        "agents/researcher_agent.py": "# Agent để nghiên cứu và tư vấn\n",
+        "agents/project_manager_agent.py": "# Agent để quản lý và xác thực tài liệu\n",
+        "agents/initiation_agents.py": "# Agent cho giai đoạn khởi tạo\n",
+        "agents/planning_agents.py": "# Agent cho giai đoạn lập kế hoạch\n",
+        "agents/requirement_agents.py": "# Agent cho giai đoạn yêu cầu\n",
+        "agents/design_agents.py": "# Agent cho giai đoạn thiết kế\n",
+        "agents/development_agents.py": "# Agent cho giai đoạn phát triển\n",
+        "agents/testing_agents.py": "# Agent cho giai đoạn kiểm thử\n",
+        "agents/deployment_agents.py": "# Agent cho giai đoạn triển khai\n",
+        "agents/maintenance_agents.py": "# Agent cho giai đoạn bảo trì\n",
+        "tasks/initiation_tasks.py": "# Tác vụ cho giai đoạn khởi tạo\n",
+        "tasks/planning_tasks.py": "# Tác vụ cho giai đoạn lập kế hoạch\n",
+        "tasks/requirement_tasks.py": "# Tác vụ cho giai đoạn yêu cầu\n",
+        "tasks/design_tasks.py": "# Tác vụ cho giai đoạn thiết kế\n",
+        "tasks/development_tasks.py": "# Tác vụ cho giai đoạn phát triển\n",
+        "tasks/testing_tasks.py": "# Tác vụ cho giai đoạn kiểm thử\n",
+        "tasks/deployment_tasks.py": "# Tác vụ cho giai đoạn triển khai\n",
+        "tasks/maintenance_tasks.py": "# Tác vụ cho giai đoạn bảo trì\n",
+        "input/system_request_summary.docx": "",  # File rỗng
+        "memory/shared_memory.py": "# Lớp bộ nhớ dùng chung\n",
+        "utils/output_formats.py": "# Hàm định dạng đầu ra\n",
+        "main.py": "# File chính để chạy dự án\n",
+        "requirements.txt": "\ncrewai\npython-docx\nopenpyxl\npandas\n"
+    }
 
-    # Đảm bảo thư mục output và input tồn tại
-    output_base_dir = "output"
-    os.makedirs(output_base_dir, exist_ok=True)
-    logging.info(f"Đã tạo thư mục output: {output_base_dir}")
+    # Tạo các file
+    for file_path, content in files.items():
+        if not os.path.exists(file_path):
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
 
-    input_base_dir = "input"
-    os.makedirs(input_base_dir, exist_ok=True)
-    logging.info(f"Đã tạo thư mục input: {input_base_dir}")
-
-    # Kiểm tra GEMINI_API_KEY
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        logging.error("Lỗi: Biến môi trường GEMINI_API_KEY chưa được đặt trong file .env")
-        return False # Trả về False nếu không tìm thấy key
-    else:
-        logging.info("GEMINI_API_KEY đã được tải.")
-        return True # Trả về True nếu key tồn tại
+if __name__ == "__main__":
+    create_project_structure()
+    print("Cấu trúc dự án đã được tạo thành công!")

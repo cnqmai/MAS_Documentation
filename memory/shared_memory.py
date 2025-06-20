@@ -1,44 +1,54 @@
-# memory/shared_memory.py
+import threading
+import logging
 
 class SharedMemory:
-    """
-    Lớp để quản lý bộ nhớ chia sẻ giữa các tác vụ và các phase.
-    Cấu trúc: { 'phase_name': { 'key': value } }
-    """
     def __init__(self):
+        """
+        Khởi tạo bộ nhớ dùng chung với khóa thread-safe.
+        """
         self._data = {}
+        self._lock = threading.Lock()
+        logging.info("Khởi tạo SharedMemory")
 
-    def set(self, phase_name: str, key: str, value):
+    def save(self, key, value):
         """
-        Lưu trữ một giá trị vào bộ nhớ chia sẻ.
+        Lưu dữ liệu vào bộ nhớ với key được chỉ định.
+        Args:
+            key (str): Khóa để xác định dữ liệu.
+            value: Giá trị cần lưu (có thể là str, dict, list, v.v.).
         """
-        if phase_name not in self._data:
-            self._data[phase_name] = {}
-        self._data[phase_name][key] = value
-        print(f"[SharedMemory] Đã lưu: Phase '{phase_name}', Key '{key}'")
+        with self._lock:
+            self._data[key] = value
+            logging.info(f"Đã lưu dữ liệu với khóa: {key}")
 
-    def get(self, phase_name: str, key: str):
+    def load(self, key):
         """
-        Lấy một giá trị từ bộ nhớ chia sẻ.
-        Trả về None nếu không tìm thấy.
+        Truy xuất dữ liệu từ bộ nhớ theo key.
+        Args:
+            key (str): Khóa để lấy dữ liệu.
+        Returns:
+            Giá trị tương ứng hoặc None nếu không tìm thấy.
         """
-        if phase_name in self._data and key in self._data[phase_name]:
-            return self._data[phase_name][key]
-        print(f"[SharedMemory] Không tìm thấy: Phase '{phase_name}', Key '{key}'")
-        return None
-
-    def get_phase_data(self, phase_name: str):
-        """
-        Lấy tất cả dữ liệu cho một phase cụ thể.
-        """
-        return self._data.get(phase_name, {})
+        with self._lock:
+            value = self._data.get(key)
+            logging.info(f"Đã truy xuất dữ liệu với khóa: {key}")
+            return value
 
     def clear(self):
         """
-        Xóa toàn bộ bộ nhớ.
+        Xóa tất cả dữ liệu trong bộ nhớ.
         """
-        self._data = {}
-        print("[SharedMemory] Đã xóa toàn bộ bộ nhớ.")
+        with self._lock:
+            self._data.clear()
+            logging.info("Đã xóa toàn bộ dữ liệu trong SharedMemory")
 
-# Khởi tạo một thể hiện toàn cục để sử dụng
-shared_memory = SharedMemory()
+    def keys(self):
+        """
+        Lấy danh sách tất cả các khóa trong bộ nhớ.
+        Returns:
+            list: Danh sách các khóa.
+        """
+        with self._lock:
+            keys = list(self._data.keys())
+            logging.info("Đã lấy danh sách các khóa")
+            return keys
