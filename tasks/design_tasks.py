@@ -47,7 +47,8 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
         "privacy_security_requirements": shared_memory.load("privacy_security_requirements"),
         "system_architecture": shared_memory.load("system_architecture"),
         "hld": shared_memory.load("hld"),
-        "technical_requirements": shared_memory.load("technical_requirements")
+        "technical_requirements": shared_memory.load("technical_requirements"),
+        "system_requirements": shared_memory.load("system_requirements")
     }
 
     # Task 1: System Requirements Specification
@@ -637,8 +638,8 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
         ),
         agent=design_agent,
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ kiến trúc hệ thống, lưu trong '{output_base_dir}/4_design/System_Architecture_Diagram.dot' và SharedMemory với khóa 'graphviz_system_architecture'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/4_design/System_Architecture_Diagram.png' và SharedMemory với khóa 'image_system_architecture'. "
+            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ kiến trúc hệ thống, lưu trong '{output_base_dir}/3_design/System_Architecture_Diagram.dot' và SharedMemory với khóa 'graphviz_system_architecture'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/3_design/System_Architecture_Diagram.png' và SharedMemory với khóa 'image_system_architecture'. "
             f"Sơ đồ rõ ràng, có ít nhất 4 thành phần và các liên kết tương tác."
         ),
         context=[
@@ -650,7 +651,7 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
         ],
         callback=lambda output: (
             shared_memory.save("graphviz_system_architecture", output) and
-            (open(os.path.join(output_base_dir, "4_design", "System_Architecture_Diagram.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            (open(os.path.join(output_base_dir, "3_design", "System_Architecture_Diagram.dot"), "w", encoding="utf-8").write(output), True)[-1] and
             shared_memory.save("image_system_architecture", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "4_design", "System_Architecture_Diagram")))
         )
     ))
@@ -668,8 +669,8 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
         ),
         agent=design_agent,
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa wireframe giao diện người dùng, lưu trong '{output_base_dir}/4_design/UI_Wireframe.dot' và SharedMemory với khóa 'graphviz_ui_wireframe'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/4_design/UI_Wireframe.png' và SharedMemory với khóa 'image_ui_wireframe'. "
+            f"Mã Graphviz DOT hoàn chỉnh minh họa wireframe giao diện người dùng, lưu trong '{output_base_dir}/3_design/UI_Wireframe.dot' và SharedMemory với khóa 'graphviz_ui_wireframe'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/3_design/UI_Wireframe.png' và SharedMemory với khóa 'image_ui_wireframe'. "
             f"Sơ đồ rõ ràng, có ít nhất 4 thành phần giao diện và luồng điều hướng."
         ),
         context=[
@@ -681,7 +682,7 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
         ],
         callback=lambda output: (
             shared_memory.save("graphviz_ui_wireframe", output) and
-            (open(os.path.join(output_base_dir, "4_design", "UI_Wireframe.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            (open(os.path.join(output_base_dir, "3_design", "UI_Wireframe.dot"), "w", encoding="utf-8").write(output), True)[-1] and
             shared_memory.save("image_ui_wireframe", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "4_design", "UI_Wireframe")))
         )
     ))

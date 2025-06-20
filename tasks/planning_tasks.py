@@ -1,8 +1,9 @@
 import os
 import json
 from crewai import Task
-from utils.output_formats import create_docx, create_xlsx
+from utils.output_formats import create_docx, create_xlsx, create_image
 from memory.shared_memory import SharedMemory
+from graphviz import Digraph
 
 # --- Các hàm Callback đã điều chỉnh ---
 def make_docx_callback(title, filename, shared_memory, save_key):
@@ -80,7 +81,8 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
         "risk_data_collection": shared_memory.load("risk_data_collection"),
         "activity_worksheet": shared_memory.load("activity_worksheet"),
         "wbs": shared_memory.load("wbs"),
-        "opportunities_summary": shared_memory.load("opportunities_summary")
+        "opportunities_summary": shared_memory.load("opportunities_summary"),
+        "project_plan": shared_memory.load("project_plan"),
     }
 
     # PMO Checklist
@@ -702,6 +704,49 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
             f"{output_base_dir}/1_planning/List_of_Opportunities_Summary.docx",
             shared_memory,
             "opportunities_summary"
+        )
+    ))
+
+    # New Task: WBS Diagram for Work Breakdown Structure (Graphviz)
+    tasks.append(Task(
+        description=(
+            f"Dựa trên dữ liệu project_plan:\n\n"
+            f"project_plan:\n{global_context['project_plan'] or 'Không có dữ liệu'}\n\n"
+            f"Tạo một sơ đồ Work Breakdown Structure (WBS) để minh họa các gói công việc (work packages) của dự án, phân cấp theo cấu trúc cây. "
+            f"Sơ đồ phải bao gồm ít nhất 3 cấp độ (e.g., Dự án -> Giai đoạn -> Công việc cụ thể), với ít nhất 4 gói công việc ở cấp thấp nhất. "
+            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'WBS_Diagram.dot' trong thư mục '{output_base_dir}/1_planning'. "
+            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
+            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_wbs_diagram' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_wbs_diagram'."
+        ),
+        agent=planning_agent, 
+        expected_output=(
+            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ WBS, lưu trong '{output_base_dir}/1_planning/WBS_Diagram.dot' và SharedMemory với khóa 'graphviz_wbs_diagram'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/1_planning/WBS_Diagram.png' và SharedMemory với khóa 'image_wbs_diagram'. "
+            f"Sơ đồ rõ ràng, có ít nhất 3 cấp độ và 4 gói công việc ở cấp thấp nhất."
+        ),
+        context=[
+            {
+                "description": "Thông tin từ project_plan",
+                "expected_output": "Tóm tắt kế hoạch dự án để xác định các gói công việc và cấu trúc phân cấp.",
+                "input": global_context["project_plan"] or "Không có dữ liệu"
+            }
+        ],
+        callback=lambda output: (
+            __import__('os').makedirs(os.path.join(output_base_dir, "1_planning"), exist_ok=True) or
+            shared_memory.save("graphviz_wbs_diagram", output) or
+            open(os.path.join(output_base_dir, "1_planning", "WBS_Diagram.dot"), "w", encoding="utf-8").write(output) or
+            (
+                __import__('graphviz').Source(output).render(
+                    filename=os.path.join(output_base_dir, "1_planning", "WBS_Diagram"),
+                    format="png",
+                    cleanup=True
+                ),
+                shared_memory.save(
+                    "image_wbs_diagram",
+                    os.path.join(output_base_dir, "1_planning", "WBS_Diagram.png")
+                ),
+                True
+            )[-1]
         )
     ))
 

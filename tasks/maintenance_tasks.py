@@ -32,7 +32,7 @@ def make_docx_callback(title, filename, shared_memory, save_key):
 # --- Hàm tạo Task chính ---
 def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, maintenance_agent):
     tasks = []
-    os.makedirs(f"{output_base_dir}/7_maintain", exist_ok=True)
+    os.makedirs(f"{output_base_dir}/7_maintenance", exist_ok=True)
 
     global_context = {
         "test_summary_report": shared_memory.load("test_summary_report"),
@@ -84,7 +84,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Đúc kết kinh nghiệm",
-            f"{output_base_dir}/7_maintain/Lessons_Learned.docx",
+            f"{output_base_dir}/7_maintenance/Lessons_Learned.docx",
             shared_memory,
             "lessons_learned"
         )
@@ -121,7 +121,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Kế hoạch chuyển giao",
-            f"{output_base_dir}/7_maintain/Transition_Out_Plan.docx",
+            f"{output_base_dir}/7_maintenance/Transition_Out_Plan.docx",
             shared_memory,
             "transition_out_plan"
         )
@@ -149,7 +149,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         }],
         callback=make_docx_callback(
             "Bảng khảo sát đánh giá dự án",
-            f"{output_base_dir}/7_maintain/Post_Project_Survey_Questionnaire.docx",
+            f"{output_base_dir}/7_maintenance/Post_Project_Survey_Questionnaire.docx",
             shared_memory,
             "post_project_survey"
         )
@@ -186,7 +186,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Đánh giá sau dự án",
-            f"{output_base_dir}/7_maintain/Post_Project_Review.docx",
+            f"{output_base_dir}/7_maintenance/Post_Project_Review.docx",
             shared_memory,
             "post_project_review"
         )
@@ -223,7 +223,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Yêu cầu thay đổi",
-            f"{output_base_dir}/7_maintain/Change_Request_Document.docx",
+            f"{output_base_dir}/7_maintenance/Change_Request_Document.docx",
             shared_memory,
             "change_request"
         )
@@ -260,7 +260,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Kế hoạch khắc phục thảm họa",
-            f"{output_base_dir}/7_maintain/Disaster_Recovery_Plan.docx",
+            f"{output_base_dir}/7_maintenance/Disaster_Recovery_Plan.docx",
             shared_memory,
             "disaster_recovery_plan"
         )
@@ -297,7 +297,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Giấy chứng nhận nghiệm thu",
-            f"{output_base_dir}/7_maintain/Certificate_Of_Compliance.docx",
+            f"{output_base_dir}/7_maintenance/Certificate_Of_Compliance.docx",
             shared_memory,
             "certificate_of_compliance"
         )
@@ -334,7 +334,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Yêu cầu nâng cấp",
-            f"{output_base_dir}/7_maintain/Request_For_Enhancement.docx",
+            f"{output_base_dir}/7_maintenance/Request_For_Enhancement.docx",
             shared_memory,
             "request_for_enhancement"
         )
@@ -371,7 +371,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Kế hoạch ngừng sử dụng sản phẩm",
-            f"{output_base_dir}/7_maintain/Product_Retirement_Plan.docx",
+            f"{output_base_dir}/7_maintenance/Product_Retirement_Plan.docx",
             shared_memory,
             "product_retirement_plan"
         )
@@ -408,7 +408,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Tóm tắt hỗ trợ ứng dụng toàn cầu",
-            f"{output_base_dir}/7_maintain/Global_Application_Support_Summary.docx",
+            f"{output_base_dir}/7_maintenance/Global_Application_Support_Summary.docx",
             shared_memory,
             "global_support_summary"
         )
@@ -445,7 +445,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Báo cáo chuyển giao kiến thức",
-            f"{output_base_dir}/7_maintain/Developer_Knowledge_Transfer_Report.docx",
+            f"{output_base_dir}/7_maintenance/Developer_Knowledge_Transfer_Report.docx",
             shared_memory,
             "knowledge_transfer_report"
         )
@@ -482,7 +482,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Danh sách kiểm tra bảo trì",
-            f"{output_base_dir}/7_maintain/Maintenance_Checklist.docx",
+            f"{output_base_dir}/7_maintenance/Maintenance_Checklist.docx",
             shared_memory,
             "maintenance_checklist"
         )
@@ -510,7 +510,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         }],
         callback=make_docx_callback(
             "Mẫu báo cáo sự cố",
-            f"{output_base_dir}/7_maintain/Issue_Reporting_Template.docx",
+            f"{output_base_dir}/7_maintenance/Issue_Reporting_Template.docx",
             shared_memory,
             "issue_reporting_template"
         )
@@ -547,7 +547,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Chính sách SLA và bảo hành",
-            f"{output_base_dir}/7_maintain/SLA_and_Warranty_Policies.docx",
+            f"{output_base_dir}/7_maintenance/SLA_and_Warranty_Policies.docx",
             shared_memory,
             "sla_warranty_policies"
         )
@@ -584,7 +584,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Hướng dẫn quản lý bản vá bảo mật",
-            f"{output_base_dir}/7_maintain/Security_Patch_Management_Guide.docx",
+            f"{output_base_dir}/7_maintenance/Security_Patch_Management_Guide.docx",
             shared_memory,
             "security_patch_management"
         )
@@ -612,7 +612,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         }],
         callback=make_docx_callback(
             "Báo cáo phân tích sử dụng",
-            f"{output_base_dir}/7_maintain/Usage_Analytics_Report.docx",
+            f"{output_base_dir}/7_maintenance/Usage_Analytics_Report.docx",
             shared_memory,
             "usage_analytics_report"
         )
@@ -649,7 +649,7 @@ def create_maintenance_tasks(shared_memory: SharedMemory, output_base_dir: str, 
         ],
         callback=make_docx_callback(
             "Kế hoạch bảo trì và hỗ trợ",
-            f"{output_base_dir}/7_maintain/Maintenance_and_Support_Plan.docx",
+            f"{output_base_dir}/7_maintenance/Maintenance_and_Support_Plan.docx",
             shared_memory,
             "maintenance_support_plan"
         )

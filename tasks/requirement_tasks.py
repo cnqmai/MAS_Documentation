@@ -577,8 +577,8 @@ def create_requirements_tasks(shared_memory: SharedMemory, output_base_dir: str,
         ),
         agent=researcher_agent,
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ use case cho BRD, lưu trong '{output_base_dir}/3_requirements/Use_Case_Diagram_BRD.dot' và SharedMemory với khóa 'graphviz_brd_use_case'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/3_requirements/Use_Case_Diagram_BRD.png' và SharedMemory với khóa 'image_brd_use_case'. "
+            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ use case cho BRD, lưu trong '{output_base_dir}/2_requirements/Use_Case_Diagram_BRD.dot' và SharedMemory với khóa 'graphviz_brd_use_case'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/2_requirements/Use_Case_Diagram_BRD.png' và SharedMemory với khóa 'image_brd_use_case'. "
             f"Sơ đồ rõ ràng, có ít nhất 3 actor và 5 use case, với các liên kết được thể hiện."
         ),
         context=[
@@ -595,7 +595,7 @@ def create_requirements_tasks(shared_memory: SharedMemory, output_base_dir: str,
         ],
         callback=lambda output: (
             shared_memory.save("graphviz_brd_use_case", output) and
-            (open(os.path.join(output_base_dir, "3_requirements", "Use_Case_Diagram_BRD.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            (open(os.path.join(output_base_dir, "2_requirements", "Use_Case_Diagram_BRD.dot"), "w", encoding="utf-8").write(output), True)[-1] and
             shared_memory.save("image_brd_use_case", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "3_requirements", "Use_Case_Diagram_BRD")))
         )
     ))
@@ -614,8 +614,8 @@ def create_requirements_tasks(shared_memory: SharedMemory, output_base_dir: str,
         ),
         agent=researcher_agent,
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa ma trận truy xuất yêu cầu cho RTM, lưu trong '{output_base_dir}/3_requirements/Traceability_Matrix_RTM.dot' và SharedMemory với khóa 'graphviz_rtm_traceability'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/3_requirements/Traceability_Matrix_RTM.png' và SharedMemory với khóa 'image_rtm_traceability'. "
+            f"Mã Graphviz DOT hoàn chỉnh minh họa ma trận truy xuất yêu cầu cho RTM, lưu trong '{output_base_dir}/2_requirements/Traceability_Matrix_RTM.dot' và SharedMemory với khóa 'graphviz_rtm_traceability'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/2_requirements/Traceability_Matrix_RTM.png' và SharedMemory với khóa 'image_rtm_traceability'. "
             f"Sơ đồ rõ ràng, có ít nhất 5 yêu cầu và 5 test case, với các liên kết được thể hiện."
         ),
         context=[
@@ -632,7 +632,7 @@ def create_requirements_tasks(shared_memory: SharedMemory, output_base_dir: str,
         ],
         callback=lambda output: (
             shared_memory.save("graphviz_rtm_traceability", output) and
-            (open(os.path.join(output_base_dir, "3_requirements", "Traceability_Matrix_RTM.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            (open(os.path.join(output_base_dir, "2_requirements", "Traceability_Matrix_RTM.dot"), "w", encoding="utf-8").write(output), True)[-1] and
             shared_memory.save("image_rtm_traceability", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "3_requirements", "Traceability_Matrix_RTM")))
         )
     ))

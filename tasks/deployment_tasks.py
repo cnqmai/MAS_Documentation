@@ -33,7 +33,7 @@ def make_docx_callback(title, filename, shared_memory, save_key):
 # --- Hàm tạo Task chính ---
 def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, deployment_agent):
     tasks = []
-    os.makedirs(f"{output_base_dir}/6_deploy", exist_ok=True)
+    os.makedirs(f"{output_base_dir}/6_deployment", exist_ok=True)
 
     global_context = {
         "build_deployment_plan": shared_memory.load("build_deployment_plan"),
@@ -70,7 +70,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
 }],
         callback=make_docx_callback(
             "Hướng dẫn quy trình",
-            f"{output_base_dir}/6_deploy/Process_Guide.docx",
+            f"{output_base_dir}/6_deployment/Process_Guide.docx",
             shared_memory,
             "process_guideline"
         )
@@ -107,7 +107,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ],
         callback=make_docx_callback(
             "Hướng dẫn cài đặt",
-            f"{output_base_dir}/6_deploy/Installation_Guide.docx",
+            f"{output_base_dir}/6_deployment/Installation_Guide.docx",
             shared_memory,
             "installation_guideline"
         )
@@ -144,7 +144,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ],
         callback=make_docx_callback(
             "Hướng dẫn sử dụng phần mềm",
-            f"{output_base_dir}/6_deploy/Software_User_Guide.docx",
+            f"{output_base_dir}/6_deployment/Software_User_Guide.docx",
             shared_memory,
             "software_user_guideline"
         )
@@ -181,7 +181,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ],
         callback=make_docx_callback(
             "Hướng dẫn quản trị hệ thống",
-            f"{output_base_dir}/6_deploy/System_Administration_Guide.docx",
+            f"{output_base_dir}/6_deployment/System_Administration_Guide.docx",
             shared_memory,
             "system_admin_guideline"
         )
@@ -218,7 +218,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ],
         callback=make_docx_callback(
             "Hướng dẫn vận hành",
-            f"{output_base_dir}/6_deploy/Operations_Guide.docx",
+            f"{output_base_dir}/6_deployment/Operations_Guide.docx",
             shared_memory,
             "operations_guideline"
         )
@@ -255,7 +255,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ],
         callback=make_docx_callback(
             "Kế hoạch triển khai sản phẩm",
-            f"{output_base_dir}/6_deploy/Production_Implementation_Plan.docx",
+            f"{output_base_dir}/6_deployment/Production_Implementation_Plan.docx",
             shared_memory,
             "production_implementation_plan"
         )
@@ -292,7 +292,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ],
         callback=make_docx_callback(
             "Phê duyệt bàn giao sản xuất",
-            f"{output_base_dir}/6_deploy/Production_Turnover_Approval.docx",
+            f"{output_base_dir}/6_deployment/Production_Turnover_Approval.docx",
             shared_memory,
             "production_turnover_approval"
         )
@@ -329,7 +329,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ],
         callback=make_docx_callback(
             "Kế hoạch triển khai",
-            f"{output_base_dir}/6_deploy/Deployment_Plan.docx",
+            f"{output_base_dir}/6_deployment/Deployment_Plan.docx",
             shared_memory,
             "deployment_plan"
         )
@@ -366,7 +366,7 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ],
         callback=make_docx_callback(
             "Hướng dẫn thiết lập giám sát và cảnh báo",
-            f"{output_base_dir}/6_deploy/Monitoring_and_Alerting_Setup_Guide.docx",
+            f"{output_base_dir}/6_deployment/Monitoring_and_Alerting_Setup_Guide.docx",
             shared_memory,
             "monitoring_alerting_guideline"
         )
