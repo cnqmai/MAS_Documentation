@@ -1,301 +1,457 @@
-import os
-import logging
-import re
 from crewai import Task
-from textwrap import dedent
-from utils.file_writer import write_output
-from memory.shared_memory import shared_memory
-from docx import Document
-from docx.shared import Inches
-import graphviz
+from utils.output_formats import create_docx, create_xlsx
+from memory.shared_memory import SharedMemory
+import os
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def read_file_content(file_path):
-    """Đọc nội dung file nếu tồn tại."""
-    if file_path and file_path != "N/A" and os.path.exists(file_path):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            logging.warning(f"Không thể đọc file {file_path}: {e}")
-            return f"N/A (Lỗi đọc file: {e})"
-    return "N/A (File không tồn tại)"
-
-def create_testing_tasks(testing_agent, project_manager_agent, output_base_dir):
+def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, testing_agent):
     """
-    Tạo các task liên quan đến giai đoạn Kiểm thử.
-    Args:
-        testing_agent: Agent chính cho Testing.
-        project_manager_agent: Agent cho Audit và Quality Gate.
-        output_base_dir: Đường dẫn thư mục base.
-    Returns:
-        list: Danh sách các Task đã tạo.
+    Tạo các tác vụ cho giai đoạn Kiểm thử (Testing Phase).
     """
-    # Tạo thư mục con cho Phase 5 Testing
-    phase_output_dir = os.path.join(output_base_dir, "5_testing")
-    os.makedirs(phase_output_dir, exist_ok=True)
-    logging.info(f"Đảm bảo thư mục output cho Phase 5: Testing tồn tại tại: {phase_output_dir}")
+    tasks = []
 
-    # Lấy các input từ shared_memory với fallback
-    srs_content = shared_memory.get("phase_2_requirements", "srs_document") or "N/A"
-    use_case_doc_path = shared_memory.get("phase_2_requirements", "use_case_document_path") or "N/A"
-    use_case_diagram_path = shared_memory.get("phase_2_requirements", "use_case_diagram_path") or "N/A"
-    nfrd_content = shared_memory.get("phase_2_requirements", "nfrd_document") or "N/A"
-    project_plan_xml_path = shared_memory.get("phase_1_planning", "project_plan_xml_path") or "N/A"
-    hld_doc_path = shared_memory.get("phase_3_design", "hld_document_path") or "N/A"
-    source_code_path = shared_memory.get("phase_4_development", "source_code_doc_template") or "N/A"
-    coding_standards_path = shared_memory.get("phase_4_development", "coding_standards_document_path") or "N/A"
-
-    # Context string cho các task
-    testing_context_str = dedent(f"""
-        Dựa trên các tài liệu đã có:
-        - Yêu cầu phần mềm (SRS): {srs_content[:500]}... (hoặc từ file: {use_case_doc_path})
-        - Sơ đồ Use Case: {use_case_diagram_path}
-        - Yêu cầu phi chức năng (NFRD): {nfrd_content[:500]}...
-        - Kế hoạch dự án: {read_file_content(project_plan_xml_path)}
-        - Tài liệu thiết kế (HLD): {hld_doc_path}
-        - Mã nguồn: {source_code_path}
-        - Tiêu chuẩn mã hóa: {coding_standards_path}
-    """)
-
-    # --- 1. Task: QA Checklist Creation (testing_agent) ---
-    def qa_checklist_callback(output):
-        logging.info("--- Hoàn thành QA Checklist Creation Task ---")
-        file_path = os.path.join(phase_output_dir, "QA_Checklist.md")
-        write_output(file_path, str(output))
-        shared_memory.set("phase_5_testing", "qa_checklist_path", file_path)
-        logging.info("Đã lưu QA_Checklist.md và cập nhật shared_memory.")
-
-    qa_checklist_task = Task(
-        description=dedent(f"""
-            Tạo một danh sách kiểm tra chất lượng (QA Checklist) chi tiết dựa trên Tài liệu Yêu cầu Phần mềm (SRS),
-            Yêu cầu Phi Chức năng (NFRD), tài liệu thiết kế, và các tiêu chuẩn ngành liên quan đến chất lượng phần mềm.
-            Danh sách này sẽ được sử dụng để hướng dẫn toàn bộ quá trình kiểm thử.
-            Tập trung vào các khía cạnh: tính năng, hiệu năng, bảo mật, khả năng sử dụng, và khả năng tương thích.
-            Đầu ra phải là một tài liệu Markdown rõ ràng, có cấu trúc tốt.
-            {testing_context_str}
-        """),
-        expected_output="Một tài liệu Markdown tiếng Việt có cấu trúc tốt 'QA_Checklist.md' bao gồm các hạng mục kiểm tra chi tiết.",
-        agent=testing_agent,
-        callback=qa_checklist_callback
+    # Tác vụ tạo Documentation Quality Assurance Checklist
+    doc_qa_checklist_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Danh sách kiểm tra đảm bảo chất lượng tài liệu (Documentation Quality Assurance Checklist) dựa trên dữ liệu từ `dev_standards` trong SharedMemory. "
+            "Tài liệu này kiểm tra chất lượng tài liệu trước khi triển khai, đảm bảo tài liệu đạt tiêu chuẩn. "
+            "Nội dung phải bao gồm: thuộc tính tài liệu, track changes, trang bìa, mục lục, header/footer, chính tả và ngữ pháp, định dạng và bố cục, từ viết tắt, phụ lục, thông tin liên hệ, cross-reference, chú thích, hình ảnh, liên kết, chỉ mục, ngắt trang, sơ đồ quy trình, bảng biểu. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Documentation_QA_Checklist.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `doc_qa_checklist`."
+        ),
+        agent=project_manager_agent,
+        expected_output=(
+            "Tài liệu `Documentation_QA_Checklist.docx` chứa danh sách kiểm tra chất lượng tài liệu, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `doc_qa_checklist`."
+        ),
+        callback=lambda output: create_docx(
+            "Danh sách kiểm tra đảm bảo chất lượng tài liệu",
+            [
+                "1. Thuộc tính tài liệu: Tên, phiên bản, ngày phát hành (lấy từ dev_standards).",
+                "2. Track Changes: Kiểm tra trạng thái track changes.",
+                "3. Trang bìa và mục lục: Kiểm tra trang bìa và mục lục.",
+                "4. Header/Footer: Kiểm tra định dạng header/footer.",
+                "5. Chính tả và ngữ pháp: Kiểm tra lỗi chính tả và ngữ pháp.",
+                "6. Định dạng và bố cục: Kiểm tra định dạng và bố cục tài liệu.",
+                "7. Từ viết tắt: Kiểm tra danh sách từ viết tắt.",
+                "8. Phụ lục và thông tin liên hệ: Kiểm tra phụ lục và thông tin liên hệ.",
+                "9. Cross-reference và chú thích: Kiểm tra liên kết chéo và chú thích.",
+                "10. Hình ảnh và liên kết: Kiểm tra hình ảnh và liên kết.",
+                "11. Chỉ mục và ngắt trang: Kiểm tra chỉ mục và ngắt trang.",
+                "12. Sơ đồ quy trình và bảng biểu: Kiểm tra sơ đồ và bảng biểu.",
+                shared_memory.load("dev_standards") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Documentation_QA_Checklist.docx"
+        ) and shared_memory.save("doc_qa_checklist", output)
     )
 
-    # --- 2. Task: Test Plan Document Creation (testing_agent) ---
-    def test_plan_callback(output):
-        logging.info("--- Hoàn thành Test Plan Document Creation Task ---")
-        file_path = os.path.join(phase_output_dir, "Test_Plan.docx")
-        # Extract text and DOT code
-        dot_blocks = re.findall(r'```dot\s*([\s\S]*?)\s*```', str(output))
-        text_content = re.sub(r'```dot\s*[\s\S]*?```', '', str(output)).strip()
+    # Tác vụ tạo Building Test Scenarios
+    test_scenarios_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Xây dựng kịch bản kiểm thử (Building Test Scenarios) dựa trên dữ liệu từ `functional_requirements` và `use_case_template` trong SharedMemory. "
+            "Tài liệu này xác định các kịch bản kiểm thử để kiểm tra hệ thống hoặc tình huống cụ thể. "
+            "Nội dung phải bao gồm: phân biệt test case và scenario, cách xây dựng test scenario tốt, mã phiên bản, mã build, ID kịch bản, mô tả, mục tiêu, dữ liệu thử nghiệm, ngày sửa đổi, người kiểm thử, người duyệt, các bước kiểm thử. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Building_Test_Scenarios.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `test_scenarios`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Building_Test_Scenarios.docx` chứa kịch bản kiểm thử, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `test_scenarios`."
+        ),
+        callback=lambda output: create_docx(
+            "Xây dựng kịch bản kiểm thử",
+            [
+                "1. Phân biệt test case và scenario: Sự khác biệt giữa test case và scenario.",
+                "2. Cách xây dựng test scenario: Hướng dẫn xây dựng kịch bản kiểm thử tốt.",
+                "3. Mã phiên bản và mã build: Thông tin phiên bản và build (lấy từ functional_requirements).",
+                "4. ID kịch bản, mô tả, mục tiêu: Chi tiết kịch bản kiểm thử (lấy từ use_case_template).",
+                "5. Dữ liệu thử nghiệm: Dữ liệu dùng để kiểm thử.",
+                "6. Ngày sửa đổi, người kiểm thử, người duyệt: Thông tin quản lý kịch bản.",
+                "7. Các bước kiểm thử: Các bước thực hiện kiểm thử.",
+                shared_memory.load("functional_requirements") or "Không có dữ liệu",
+                shared_memory.load("use_case_template") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Building_Test_Scenarios.docx"
+        ) and shared_memory.save("test_scenarios", output)
+    )
 
-        doc = Document()
-        doc.add_heading('Kế hoạch Kiểm thử (Test Plan)', level=1)
-        doc.add_paragraph(text_content)
-
-        if dot_blocks:
-            dot_code = dot_blocks[0]
-            graph_path = os.path.join(phase_output_dir, "Test_Strategy_Diagram")
-            try:
-                src = graphviz.Source(dot_code, format='png')
-                src.render(graph_path, view=False, cleanup=True)
-                doc.add_heading('Chiến lược Kiểm thử', level=2)
-                doc.add_picture(graph_path + '.png', width=Inches(6))
-                logging.info("Đã tạo và nhúng sơ đồ chiến lược kiểm thử.")
-            except Exception as e:
-                logging.error(f"Lỗi khi tạo sơ đồ DOT cho Test Plan: {e}")
-                doc.add_paragraph(f"Không thể tạo sơ đồ chiến lược kiểm thử. Mã DOT: {dot_code}")
-
-        doc.save(file_path)
-        shared_memory.set("phase_5_testing", "test_plan_path", file_path)
-        logging.info("Đã lưu Test_Plan.docx và cập nhật shared_memory.")
-
+    # Tác vụ tạo Test Plan
     test_plan_task = Task(
-        description=dedent(f"""
-            Xây dựng một Tài liệu Kế hoạch Kiểm thử (Test Plan) toàn diện, bao gồm:
-            - Chiến lược kiểm thử: loại hình kiểm thử (functional, non-functional, security, performance), tiếp cận.
-            - Phạm vi kiểm thử.
-            - Môi trường kiểm thử.
-            - Tiêu chí chấp nhận và kết thúc kiểm thử.
-            - Lịch trình và tài nguyên.
-            - Vẽ một sơ đồ DOT mô tả luồng/chiến lược kiểm thử chính.
-            Sử dụng thông tin từ SRS, NFRD, tài liệu thiết kế và QA Checklist.
-            Đảm bảo output được định dạng tốt để ghi vào file .docx.
-            {testing_context_str}
-            --- QA Checklist: {read_file_content(shared_memory.get("phase_5_testing", "qa_checklist_path") or "N/A")}
-        """),
-        expected_output="Một tài liệu Word tiếng Việt 'Test_Plan.docx' chứa kế hoạch kiểm thử chi tiết và một sơ đồ DOT cho chiến lược kiểm thử.",
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Kế hoạch kiểm thử (Test Plan) dựa trên dữ liệu từ `rtm`, `project_plan`, và `non_functional_requirements` trong SharedMemory. "
+            "Tài liệu này mô tả chiến lược, phạm vi, quy trình, và tiêu chí đánh giá kiểm thử phần mềm. "
+            "Nội dung phải bao gồm: mô tả phương pháp kiểm thử, phân loại kiểm thử (đơn vị, tích hợp, UAT,...), các ràng buộc, giả định, quy trình thông báo, leo thang vấn đề, các thước đo chất lượng, tiêu chí tạm dừng và khôi phục kiểm thử, phê duyệt. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Test_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `test_plan`."
+        ),
         agent=testing_agent,
-        context=[qa_checklist_task],
-        callback=test_plan_callback
+        expected_output=(
+            "Tài liệu `Test_Plan.docx` chứa kế hoạch kiểm thử, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `test_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch kiểm thử",
+            [
+                "1. Phương pháp kiểm thử: Mô tả phương pháp kiểm thử (lấy từ rtm).",
+                "2. Phân loại kiểm thử: Đơn vị, tích hợp, UAT,... (lấy từ project_plan).",
+                "3. Ràng buộc và giả định: Các ràng buộc và giả định kiểm thử.",
+                "4. Quy trình thông báo: Quy trình báo cáo và leo thang vấn đề.",
+                "5. Thước đo chất lượng: Tiêu chí đánh giá chất lượng (lấy từ non_functional_requirements`).",
+                "6. Tiêu chí tạm dừng/khôi phục: Điều kiện dừng và tiếp tục kiểm thử.",
+                "7. Phê duyệt: Quy trình phê duyệt kế hoạch kiểm thử.",
+                shared_memory.load("rtm") or "Không có dữ liệu",
+                shared_memory.load("project_plan") or "Không có dữ liệu",
+                shared_memory.load("non_functional_requirements") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Test_Plan.docx"
+        ) and shared_memory.save("test_plan", output)
     )
 
-    # --- 3. Task: Test Case Development (testing_agent) ---
-    def test_case_callback(output):
-        logging.info("--- Hoàn thành Test Case Development Task ---")
-        file_path = os.path.join(phase_output_dir, "Test_Cases.xlsx")
-        write_output(file_path, str(output))  # Giả định output là bảng có thể parse thành XLSX
-        shared_memory.set("phase_5_testing", "test_cases_path", file_path)
-        logging.info("Đã lưu Test_Cases.xlsx và cập nhật shared_memory.")
-
-    test_case_task = Task(
-        description=dedent(f"""
-            Phát triển các trường hợp kiểm thử (Test Cases) chi tiết dựa trên Tài liệu Yêu cầu Phần mềm (SRS),
-            Yêu cầu Phi Chức năng (NFRD), Tài liệu Thiết kế (HLD), và Kế hoạch Kiểm thử.
-            Mỗi Test Case cần bao gồm: ID, Mô tả, Điều kiện tiên quyết, Các bước thực hiện, Kết quả mong đợi, Mức độ ưu tiên.
-            Tạo các test case cho cả kiểm thử chức năng và phi chức năng.
-            Cung cấp output dưới dạng bảng, có thể chuyển đổi thành file Excel.
-            {testing_context_str}
-            --- Test Plan: {read_file_content(shared_memory.get("phase_5_testing", "test_plan_path") or "N/A")}
-        """),
-        expected_output="Một tài liệu tiếng Việt 'Test_Cases.xlsx' chứa danh sách các trường hợp kiểm thử chi tiết ở định dạng bảng.",
+    # Tác vụ tạo System Quality Assurance Checklist
+    system_qa_checklist_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Danh sách kiểm tra đảm bảo chất lượng hệ thống (System Quality Assurance Checklist) dựa trên dữ liệu từ `test_plan` và `srs` trong SharedMemory. "
+            "Tài liệu này kiểm tra chất lượng toàn hệ thống để đảm bảo đáp ứng yêu cầu. "
+            "Nội dung phải bao gồm: quản lý dự án (nguồn lực, quy trình, giám sát), phương pháp phát triển phần mềm/phần cứng, rà soát kỹ thuật, thông tin yêu cầu, thiết kế, mã nguồn, lịch sử bảo trì, hiệu năng, sản phẩm/phần cứng/phần mềm mua ngoài, bảo mật, tương thích, sạch virus. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `System_QA_Checklist.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `system_qa_checklist`."
+        ),
         agent=testing_agent,
-        context=[qa_checklist_task, test_plan_task],
-        callback=test_case_callback
+        expected_output=(
+            "Tài liệu `System_QA_Checklist.docx` chứa danh sách kiểm tra chất lượng hệ thống, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `system_qa_checklist`."
+        ),
+        callback=lambda output: create_docx(
+            "Danh sách kiểm tra đảm bảo chất lượng hệ thống",
+            [
+                "1. Quản lý dự án: Kiểm tra nguồn lực và quy trình (lấy từ test_plan`).",
+                "2. Phương pháp phát triển: Kiểm tra phương pháp phát triển phần mềm/phần cứng.",
+                "3. Rà soát kỹ thuật: Kiểm tra tài liệu yêu cầu và thiết kế (lấy từ srs`).",
+                "4. Mã nguồn: Kiểm tra chất lượng mã nguồn.",
+                "5. Lịch sử bảo trì: Kiểm tra lịch sử bảo trì và hiệu năng.",
+                "6. Sản phẩm mua ngoài: Kiểm tra phần cứng/phần mềm mua ngoài.",
+                "7. Bảo mật và tương thích: Kiểm tra bảo mật và tương thích hệ thống.",
+                shared_memory.load("test_plan") or "Không có dữ liệu",
+                shared_memory.load("srs") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/System_QA_Checklist.docx"
+        ) and shared_memory.save("system_qa_checklist", output)
     )
 
-    # --- 4. Task: Test Execution and Defect Reporting (testing_agent) ---
-    def test_exec_callback(output):
-        logging.info("--- Hoàn thành Test Execution and Defect Reporting Task ---")
-        file_path = os.path.join(phase_output_dir, "Test_Execution_Report.md")
-        write_output(file_path, str(output))
-        shared_memory.set("phase_5_testing", "test_execution_report_path", file_path)
-        logging.info("Đã lưu Test_Execution_Report.md và cập nhật shared_memory.")
-
-    test_exec_task = Task(
-        description=dedent(f"""
-            Giả lập việc thực thi các trường hợp kiểm thử đã tạo và báo cáo kết quả.
-            Xác định các lỗi (defects) nếu có và ghi lại chúng dưới dạng Báo cáo Lỗi (Defect Report)
-            với các thông tin: ID lỗi, Mô tả, Các bước tái hiện, Mức độ ưu tiên, Mức độ nghiêm trọng, Trạng thái.
-            Đưa ra một bản tóm tắt về tiến độ kiểm thử và tỷ lệ lỗi.
-            Giả định bạn có thể truy cập và chạy mã nguồn để kiểm thử (trong môi trường ảo).
-            {testing_context_str}
-            --- Test Cases: {read_file_content(shared_memory.get("phase_5_testing", "test_cases_path") or "N/A")}
-            --- Source Code: {read_file_content(source_code_path)}
-        """),
-        expected_output="Một tài liệu Markdown tiếng Việt 'Test_Execution_Report.md' tóm tắt kết quả thực thi kiểm thử và danh sách các lỗi (nếu có).",
+    # Tác vụ tạo System Test Plan
+    system_test_plan_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Kế hoạch kiểm thử hệ thống (System Test Plan) dựa trên dữ liệu từ `test_plan` và `srs` trong SharedMemory. "
+            "Tài liệu này mô tả kế hoạch kiểm thử toàn bộ hệ thống theo yêu cầu tài liệu. "
+            "Nội dung phải bao gồm: mục tiêu và tiêu chí vào/ra kiểm thử, phạm vi và loại kiểm thử, phân tích rủi ro, môi trường kiểm thử (phần cứng/phần mềm), lịch kiểm thử, ma trận kiểm thử (điều kiện, rủi ro, hướng dẫn). "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `System_Test_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `system_test_plan`."
+        ),
         agent=testing_agent,
-        context=[qa_checklist_task, test_plan_task, test_case_task],
-        callback=test_exec_callback
+        expected_output=(
+            "Tài liệu `System_Test_Plan.docx` chứa kế hoạch kiểm thử hệ thống, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `system_test_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch kiểm thử hệ thống",
+            [
+                "1. Mục tiêu: Mục tiêu kiểm thử hệ thống (lấy từ test_plan`).",
+                "2. Tiêu chí vào/ra: Tiêu chí bắt đầu và kết thúc kiểm thử.",
+                "3. Phạm vi và loại kiểm thử: Các loại kiểm thử hệ thống (lấy từ srs`).",
+                "4. Phân tích rủi ro: Các rủi ro liên quan đến kiểm thử.",
+                "5. Môi trường kiểm thử: Phần cứng và phần mềm kiểm thử.",
+                "6. Lịch kiểm thử: Lịch trình kiểm thử hệ thống.",
+                "7. Ma trận kiểm thử: Điều kiện, rủi ro, và hướng dẫn kiểm thử.",
+                shared_memory.load("test_plan") or "Không có dữ liệu",
+                shared_memory.load("srs") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/System_Test_Plan.docx"
+        ) and shared_memory.save("system_test_plan", output)
     )
 
-    # --- 5. Task: Security and Performance Testing (testing_agent) ---
-    def security_perf_test_callback(output):
-        logging.info("--- Hoàn thành Security and Performance Testing Task ---")
-        file_path = os.path.join(phase_output_dir, "Security_Performance_Test_Report.md")
-        write_output(file_path, str(output))
-        shared_memory.set("phase_5_testing", "security_performance_report_path", file_path)
-        logging.info("Đã lưu Security_Performance_Test_Report.md và cập nhật shared_memory.")
-
-    security_perf_test_task = Task(
-        description=dedent(f"""
-            Thực hiện đánh giá cơ bản về bảo mật (ví dụ: các lỗ hổng OWASP Top 10 phổ biến)
-            và kiểm thử hiệu năng (ví dụ: tải, stress test) cho hệ thống.
-            Sử dụng NFRD để xác định các yêu cầu bảo mật và hiệu năng.
-            Giả lập các công cụ kiểm thử tự động và báo cáo các phát hiện quan trọng.
-            {testing_context_str}
-            --- Test Plan: {read_file_content(shared_memory.get("phase_5_testing", "test_plan_path") or "N/A")}
-            --- Test Cases: {read_file_content(shared_memory.get("phase_5_testing", "test_cases_path") or "N/A")}
-        """),
-        expected_output="Một tài liệu Markdown tiếng Việt 'Security_Performance_Test_Report.md' tóm tắt các phát hiện về bảo mật và hiệu năng.",
+    # Tác vụ tạo User Acceptance Test Plan (UAT)
+    uat_plan_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Kế hoạch kiểm thử chấp nhận người dùng (User Acceptance Test Plan - UAT) dựa trên dữ liệu từ `functional_requirements` và `brd` trong SharedMemory. "
+            "Tài liệu này mô tả kế hoạch kiểm thử để đảm bảo hệ thống đáp ứng yêu cầu người dùng. "
+            "Nội dung phải bao gồm: mục đích, tài liệu tham chiếu, mô tả kiểm thử, tiêu chí vào/ra, phạm vi, hạng mục kiểm thử, rủi ro, giả định, ràng buộc, môi trường kiểm thử, kiểm thử chức năng, lịch kiểm thử, vai trò và trách nhiệm. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `User_Acceptance_Test_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `uat_plan`."
+        ),
         agent=testing_agent,
-        context=[qa_checklist_task, test_plan_task, test_case_task],
-        callback=security_perf_test_callback
+        expected_output=(
+            "Tài liệu `User_Acceptance_Test_Plan.docx` chứa kế hoạch kiểm thử chấp nhận người dùng, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `uat_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch kiểm thử chấp nhận người dùng",
+            [
+                "1. Mục đích: Mục tiêu của UAT (lấy từ brd).",
+                "2. Tài liệu tham chiếu: Các tài liệu liên quan.",
+                "3. Mô tả kiểm thử: Mô tả quy trình kiểm thử (lấy từ functional_requirements).",
+                "4. Tiêu chí vào/ra: Tiêu chí bắt đầu và kết thúc UAT.",
+                "5. Phạm vi và hạng mục: Các hạng mục kiểm thử.",
+                "6. Rủi ro, giả định, ràng buộc: Các yếu tố ảnh hưởng UAT.",
+                "7. Môi trường kiểm thử: Môi trường thực hiện UAT.",
+                "8. Lịch kiểm thử: Lịch trình và vai trò trách nhiệm.",
+                shared_memory.load("functional_requirements") or "Không có dữ liệu",
+                shared_memory.load("brd") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/User_Acceptance_Test_Plan.docx"
+        ) and shared_memory.save("uat_plan", output)
     )
 
-    # --- 6. Task: Quality Assurance Audit (project_manager_agent) ---
-    def audit_callback(output):
-        logging.info("--- Hoàn thành Quality Assurance Audit Task ---")
-        file_path = os.path.join(phase_output_dir, "Quality_Assurance_Audit_Report.md")
-        write_output(file_path, str(output))
-        shared_memory.set("phase_5_testing", "qa_audit_report_path", file_path)
-        logging.info("Đã lưu Quality_Assurance_Audit_Report.md và cập nhật shared_memory.")
-
-    audit_task = Task(
-        description=dedent(f"""
-            Thực hiện một cuộc kiểm toán chất lượng (QA Audit) độc lập.
-            Đánh giá toàn bộ quy trình kiểm thử, bao gồm kế hoạch kiểm thử, trường hợp kiểm thử,
-            báo cáo thực thi và báo cáo lỗi, để đảm bảo chúng tuân thủ các tiêu chuẩn dự án và ngành.
-            Xác định các điểm mạnh và các khu vực cần cải thiện trong quy trình QA.
-            {testing_context_str}
-            --- QA Checklist: {read_file_content(shared_memory.get("phase_5_testing", "qa_checklist_path") or "N/A")}
-            --- Test Plan: {read_file_content(shared_memory.get("phase_5_testing", "test_plan_path") or "N/A")}
-            --- Test Cases: {read_file_content(shared_memory.get("phase_5_testing", "test_cases_path") or "N/A")}
-            --- Test Execution Report: {read_file_content(shared_memory.get("phase_5_testing", "test_execution_report_path") or "N/A")}
-            --- Security/Performance Report: {read_file_content(shared_memory.get("phase_5_testing", "security_performance_report_path") or "N/A")}
-        """),
-        expected_output="Một tài liệu Markdown tiếng Việt 'Quality_Assurance_Audit_Report.md' báo cáo kết quả kiểm toán QA.",
-        agent=project_manager_agent,
-        context=[qa_checklist_task, test_plan_task, test_case_task, test_exec_task, security_perf_test_task],
-        callback=audit_callback
+    # Tác vụ tạo Test Case Specification
+    test_case_spec_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Đặc tả trường hợp kiểm thử (Test Case Specification) dựa trên dữ liệu từ `test_scenarios` và `rtm` trong SharedMemory. "
+            "Tài liệu này chi tiết hóa các trường hợp kiểm thử dựa trên kịch bản kiểm thử. "
+            "Nội dung phải bao gồm: ID test case, mô tả, mục tiêu, điều kiện tiên quyết, dữ liệu kiểm thử, các bước thực hiện, kết quả mong đợi, trạng thái pass/fail. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Test_Case_Specification.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `test_case_spec`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Test_Case_Specification.docx` chứa đặc tả trường hợp kiểm thử, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `test_case_spec`."
+        ),
+        callback=lambda output: create_docx(
+            "Đặc tả trường hợp kiểm thử",
+            [
+                "1. ID test case: Mã định danh test case (lấy từ test_scenarios).",
+                "2. Mô tả và mục tiêu: Mô tả và mục tiêu của test case.",
+                "3. Điều kiện tiên quyết: Các điều kiện cần thiết để thực hiện (lấy từ rtm).",
+                "4. Dữ liệu kiểm thử: Dữ liệu dùng để kiểm thử.",
+                "5. Các bước thực hiện: Các bước thực hiện test case.",
+                "6. Kết quả mong đợi: Kết quả dự kiến của test case.",
+                "7. Trạng thái: Pass/fail của test case.",
+                shared_memory.load("test_scenarios") or "Không có dữ liệu",
+                shared_memory.load("rtm") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Test_Case_Specification.docx"
+        ) and shared_memory.save("test_case_spec", output)
     )
 
-    # --- 7. Task: Test Management Reporting (project_manager_agent) ---
-    def test_management_callback(output):
-        logging.info("--- Hoàn thành Test Management Reporting Task ---")
-        file_path = os.path.join(phase_output_dir, "Test_Management_Report.docx")
-        doc = Document()
-        doc.add_heading('Báo cáo Quản lý Kiểm thử', level=1)
-        doc.add_paragraph(str(output))
-        doc.save(file_path)
-        shared_memory.set("phase_5_testing", "test_management_report_path", file_path)
-        logging.info("Đã lưu Test_Management_Report.docx và cập nhật shared_memory.")
-
-    test_management_task = Task(
-        description=dedent(f"""
-            Tổng hợp tất cả các báo cáo kiểm thử (Test Execution Report, Security/Performance Report, QA Audit Report)
-            thành một báo cáo quản lý tổng thể cho Project Manager.
-            Báo cáo này cần cung cấp cái nhìn tổng quan về tình trạng chất lượng sản phẩm, các rủi ro còn tồn đọng,
-            và khuyến nghị để đưa ra quyết định "Go/No-Go" cho giai đoạn tiếp theo.
-            {testing_context_str}
-            --- Test Execution Report: {read_file_content(shared_memory.get("phase_5_testing", "test_execution_report_path") or "N/A")}
-            --- Security/Performance Report: {read_file_content(shared_memory.get("phase_5_testing", "security_performance_report_path") or "N/A")}
-            --- QA Audit Report: {read_file_content(shared_memory.get("phase_5_testing", "qa_audit_report_path") or "N/A")}
-        """),
-        expected_output="Một tài liệu Word tiếng Việt 'Test_Management_Report.docx' tóm tắt toàn bộ tình hình kiểm thử và đề xuất quyết định.",
-        agent=project_manager_agent,
-        context=[test_exec_task, security_perf_test_task, audit_task],
-        callback=test_management_callback
+    # Tác vụ tạo Testing Bug Report
+    bug_report_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Báo cáo lỗi kiểm thử (Testing Bug Report) dựa trên dữ liệu từ `test_case_spec` và `system_test_plan` trong SharedMemory. "
+            "Tài liệu này ghi nhận chi tiết các lỗi phát hiện trong quá trình kiểm thử. "
+            "Nội dung phải bao gồm: mô tả lỗi, vị trí xuất hiện, mức độ nghiêm trọng, trạng thái, mức ưu tiên, môi trường thử nghiệm, phương pháp và người phụ trách. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Testing_Bug_Report.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `bug_report`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Testing_Bug_Report.docx` chứa báo cáo lỗi kiểm thử, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `bug_report`."
+        ),
+        callback=lambda output: create_docx(
+            "Báo cáo lỗi kiểm thử",
+            [
+                "1. Mô tả lỗi: Chi tiết về lỗi phát hiện (lấy từ test_case_spec).",
+                "2. Vị trí xuất hiện: Vị trí lỗi trong hệ thống (lấy từ system_test_plan).",
+                "3. Mức độ nghiêm trọng: Mức độ ảnh hưởng của lỗi.",
+                "4. Trạng thái: Trạng thái hiện tại của lỗi (mới, đang xử lý, đã sửa).",
+                "5. Mức ưu tiên: Ưu tiên xử lý lỗi.",
+                "6. Môi trường thử nghiệm: Môi trường phát hiện lỗi.",
+                "7. Phương pháp và người phụ trách: Phương pháp kiểm thử và người xử lý.",
+                shared_memory.load("test_case_spec") or "Không có dữ liệu",
+                shared_memory.load("system_test_plan") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Testing_Bug_Report.docx"
+        ) and shared_memory.save("bug_report", output)
     )
 
-    # --- 8. Task: Quality Gate Review (project_manager_agent) ---
-    def quality_gate_callback(output):
-        logging.info("--- Hoàn thành Quality Gate Review Task for Testing ---")
-        file_path = os.path.join(phase_output_dir, "Validation_Report_Phase_5.md")
-        write_output(file_path, str(output))
-        shared_memory.set("phase_5_testing", "validation_report_path", file_path)
-        logging.info("Đã lưu Validation_Report_Phase_5.md và cập nhật shared_memory.")
-
-    quality_gate_testing_task = Task(
-        description=dedent(f"""
-            Thực hiện Quality Gate cuối cùng cho giai đoạn Kiểm thử.
-            Đánh giá kỹ lưỡng tất cả tài liệu và báo cáo kiểm thử (QA Checklist, Test Plan, Test Cases,
-            Test Execution Report, Security/Performance Report, QA Audit Report, Test Management Report).
-            Kiểm tra tính đầy đủ, chính xác, nhất quán và tuân thủ các tiêu chuẩn chất lượng.
-            Xác nhận giai đoạn Kiểm thử có đủ điều kiện để chuyển tiếp sang giai đoạn Triển khai và Giao nộp hay không.
-            {testing_context_str}
-            --- QA Checklist: {read_file_content(shared_memory.get("phase_5_testing", "qa_checklist_path") or "N/A")}
-            --- Test Plan: {read_file_content(shared_memory.get("phase_5_testing", "test_plan_path") or "N/A")}
-            --- Test Cases: {read_file_content(shared_memory.get("phase_5_testing", "test_cases_path") or "N/A")}
-            --- Test Execution Report: {read_file_content(shared_memory.get("phase_5_testing", "test_execution_report_path") or "N/A")}
-            --- Security/Performance Report: {read_file_content(shared_memory.get("phase_5_testing", "security_performance_report_path") or "N/A")}
-            --- QA Audit Report: {read_file_content(shared_memory.get("phase_5_testing", "qa_audit_report_path") or "N/A")}
-            --- Test Management Report: {read_file_content(shared_memory.get("phase_5_testing", "test_management_report_path") or "N/A")}
-        """),
-        expected_output="Một tài liệu Markdown tiếng Việt 'Validation_Report_Phase_5.md' nêu rõ kết quả kiểm tra Quality Gate, lý do và các đề xuất cải thiện.",
-        agent=project_manager_agent,
-        context=[qa_checklist_task, test_plan_task, test_case_task, test_exec_task,
-                 security_perf_test_task, audit_task, test_management_task],
-        callback=quality_gate_callback
+    # Tác vụ tạo Testing Bug List
+    bug_list_task = Task(
+        description=(
+            "Sử dụng công cụ `create_xlsx` để tạo tài liệu Danh sách lỗi kiểm thử (Testing Bug List) dựa trên dữ liệu từ `bug_report` trong SharedMemory. "
+            "Tài liệu này liệt kê tất cả các lỗi phát hiện trong quá trình kiểm thử. "
+            "Nội dung phải bao gồm: ngày phát hiện, ID lỗi, ID test case, tên và mô tả lỗi, mức độ nghiêm trọng, trạng thái, người kiểm thử, phương pháp thử nghiệm. "
+            "Lưu tài liệu dưới dạng `.xlsx` trong thư mục `output/5_testing` với tên `Testing_Bug_List.xlsx`. "
+            "Lưu kết quả vào SharedMemory với khóa `bug_list`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Testing_Bug_List.xlsx` chứa danh sách lỗi kiểm thử, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `bug_list`."
+        ),
+        callback=lambda output: create_xlsx(
+            [
+                ["Ngày phát hiện", "ID lỗi", "ID test case", "Tên lỗi", "Mô tả lỗi", "Mức độ nghiêm trọng", "Trạng thái", "Người kiểm thử", "Phương pháp thử nghiệm"],
+                ["2025-06-20", "BUG-001", "TC-001", "Lỗi giao diện", "Nút submit không hoạt động", "Cao", "Mới", "Tester1", "Kiểm thử thủ công"],
+                ["2025-06-20", "BUG-002", "TC-002", "Lỗi API", "API trả về lỗi 500", "Trung bình", "Đang xử lý", "Tester2", "Kiểm thử tự động"]
+            ],
+            f"{output_base_dir}/5_testing/Testing_Bug_List.xlsx"
+        ) and shared_memory.save("bug_list", output)
     )
 
-    return [
-        qa_checklist_task,
+    # Tác vụ tạo Regression Testing Plan
+    regression_test_plan_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Kế hoạch kiểm thử hồi quy (Regression Testing Plan) dựa trên dữ liệu từ `bug_report` và `rtm` trong SharedMemory. "
+            "Tài liệu này mô tả kế hoạch kiểm thử hồi quy sau khi vá lỗi hoặc cập nhật hệ thống. "
+            "Nội dung phải bao gồm: định nghĩa và phạm vi kiểm thử hồi quy, phương pháp kiểm thử, loại kiểm thử, rủi ro, giả định, ràng buộc, lịch trình (công việc, số ngày, ngày bắt đầu/kết thúc), hướng dẫn (bước kiểm thử, kết quả mong đợi, pass/fail). "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Regression_Testing_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `regression_test_plan`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Regression_Testing_Plan.docx` chứa kế hoạch kiểm thử hồi quy, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `regression_test_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch kiểm thử hồi quy",
+            [
+                "1. Định nghĩa: Mục đích của kiểm thử hồi quy (lấy từ bug_report).",
+                "2. Phạm vi: Phạm vi kiểm thử hồi quy (lấy từ rtm).",
+                "3. Phương pháp kiểm thử: Phương pháp thực hiện kiểm thử.",
+                "4. Loại kiểm thử: Các loại kiểm thử hồi quy.",
+                "5. Rủi ro, giả định, ràng buộc: Các yếu tố ảnh hưởng kiểm thử.",
+                "6. Lịch trình: Công việc, ngày bắt đầu/kết thúc.",
+                "7. Hướng dẫn: Bước kiểm thử, kết quả mong đợi, pass/fail.",
+                shared_memory.load("bug_report") or "Không có dữ liệu",
+                shared_memory.load("rtm") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Regression_Testing_Plan.docx"
+        ) and shared_memory.save("regression_test_plan", output)
+    )
+
+    # Tác vụ tạo Project Acceptance Document
+    project_acceptance_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Văn bản nghiệm thu dự án (Project Acceptance Document) dựa trên dữ liệu từ `test_summary_report` và `uat_plan` trong SharedMemory. "
+            "Tài liệu này xác nhận dự án đã được nghiệm thu sau khi triển khai chính thức. "
+            "Nội dung phải bao gồm: tên và mã dự án, bộ phận sử dụng, người bảo trợ, quản lý dự án, mô tả dự án, tuyên bố chấp thuận, chữ ký xác nhận. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Project_Acceptance_Document.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `project_acceptance`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Project_Acceptance_Document.docx` chứa văn bản nghiệm thu dự án, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `project_acceptance`."
+        ),
+        callback=lambda output: create_docx(
+            "Văn bản nghiệm thu dự án",
+            [
+                "1. Tên và mã dự án: Thông tin dự án (lấy từ test_summary_report).",
+                "2. Bộ phận sử dụng: Đơn vị sử dụng hệ thống.",
+                "3. Người bảo trợ và quản lý: Thông tin người bảo trợ và quản lý (lấy từ uat_plan).",
+                "4. Mô tả dự án: Tóm tắt dự án.",
+                "5. Tuyên bố chấp thuận: Xác nhận nghiệm thu.",
+                "6. Chữ ký xác nhận: Chữ ký của các bên liên quan.",
+                shared_memory.load("test_summary_report") or "Không có dữ liệu",
+                shared_memory.load("uat_plan") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Project_Acceptance_Document.docx"
+        ) and shared_memory.save("project_acceptance", output)
+    )
+
+    # Tác vụ tạo Test Summary Report
+    test_summary_report_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Báo cáo tóm tắt kiểm thử (Test Summary Report) dựa trên dữ liệu từ `bug_report` và `test_case_spec` trong SharedMemory. "
+            "Tài liệu này tóm tắt kết quả kiểm thử, bao gồm các lỗi đã phát hiện và trạng thái kiểm thử. "
+            "Nội dung phải bao gồm: tổng quan kiểm thử, kết quả kiểm thử, số lượng test case (pass/fail), danh sách lỗi chính, khuyến nghị cải tiến, trạng thái sẵn sàng triển khai. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Test_Summary_Report.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `test_summary_report`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Test_Summary_Report.docx` chứa báo cáo tóm tắt kiểm thử, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `test_summary_report`."
+        ),
+        callback=lambda output: create_docx(
+            "Báo cáo tóm tắt kiểm thử",
+            [
+                "1. Tổng quan kiểm thử: Tóm tắt quy trình kiểm thử (lấy từ test_case_spec).",
+                "2. Kết quả kiểm thử: Tóm tắt kết quả kiểm thử.",
+                "3. Số lượng test case: Số lượng pass/fail (lấy từ bug_report).",
+                "4. Danh sách lỗi chính: Các lỗi nghiêm trọng phát hiện.",
+                "5. Khuyến nghị cải tiến: Đề xuất cải tiến hệ thống.",
+                "6. Trạng thái triển khai: Đánh giá sẵn sàng triển khai.",
+                shared_memory.load("bug_report") or "Không có dữ liệu",
+                shared_memory.load("test_case_spec") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Test_Summary_Report.docx"
+        ) and shared_memory.save("test_summary_report", output)
+    )
+
+    # Tác vụ tạo Risk Management Register
+    risk_management_register_task = Task(
+        description=(
+            "Sử dụng công cụ `create_xlsx` để tạo tài liệu Sổ đăng ký quản lý rủi ro (Risk Management Register) dựa trên dữ liệu từ `risk_analysis_plan` và `bug_report` trong SharedMemory. "
+            "Tài liệu này liệt kê và quản lý các rủi ro trong quá trình kiểm thử và triển khai. "
+            "Nội dung phải bao gồm: mô tả rủi ro, người chịu trách nhiệm, ngày báo cáo, ngày cập nhật, mức độ ảnh hưởng, xác suất xảy ra, thời gian tác động, trạng thái phản hồi, hành động đã/thực hiện/đang lên kế hoạch, tình trạng rủi ro hiện tại. "
+            "Lưu tài liệu dưới dạng `.xlsx` trong thư mục `output/5_testing` với tên `Risk_Management_Register.xlsx`. "
+            "Lưu kết quả vào SharedMemory với khóa `risk_management_register`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Risk_Management_Register.xlsx` chứa sổ đăng ký quản lý rủi ro, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `risk_management_register`."
+        ),
+        callback=lambda output: create_xlsx(
+            [
+                ["Mô tả rủi ro", "Người chịu trách nhiệm", "Ngày báo cáo", "Ngày cập nhật", "Mức độ ảnh hưởng", "Xác suất", "Thời gian tác động", "Trạng thái phản hồi", "Hành động", "Tình trạng"],
+                ["Lỗi hệ thống nghiêm trọng", "Tester1", "2025-06-20", "2025-06-20", "Cao", "80%", "Gần hạn", "Đã thực hiện", "Vá lỗi", "Đã đóng"],
+                ["Hiệu năng thấp", "Tester2", "2025-06-20", "2025-06-20", "Trung bình", "50%", "Trung hạn", "Đang lên kế hoạch", "Tối ưu hóa", "Đang mở"]
+            ],
+            f"{output_base_dir}/5_testing/Risk_Management_Register.xlsx"
+        ) and shared_memory.save("risk_management_register", output)
+    )
+
+    # Tác vụ tạo Project Status Report
+    project_status_report_task = Task(
+        description=(
+            "Sử dụng công cụ `create_test_plan_document` để tạo tài liệu Báo cáo tình trạng dự án (Project Status Report) dựa trên dữ liệu từ `test_summary_report` và `dev_progress_report` trong SharedMemory. "
+            "Tài liệu này tóm tắt hoạt động, vấn đề, kế hoạch, và tiến độ dự án để báo cáo cho khách hàng hoặc quản lý. "
+            "Nội dung phải bao gồm: phân phối báo cáo, tổng quan dự án, quản trị hành chính, hoạt động đã thực hiện, vấn đề hoặc chậm trễ, vấn đề cần xử lý, hoạt động dự kiến kỳ tới, trạng thái deliverables, hoàn thành theo WBS, nhiệm vụ WBS (hoàn thành, quá hạn, sắp đến), thay đổi đang mở/đã duyệt/bị từ chối, vấn đề đang mở/đã đóng, rủi ro đang mở/đã xử lý. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/5_testing` với tên `Project_Status_Report.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `project_status_report`."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            "Tài liệu `Project_Status_Report.docx` chứa báo cáo tình trạng dự án, "
+            "được lưu trong `output/5_testing` và SharedMemory với khóa `project_status_report`."
+        ),
+        callback=lambda output: create_docx(
+            "Báo cáo tình trạng dự án",
+            [
+                "1. Phân phối báo cáo: Đối tượng nhận báo cáo (lấy từ test_summary_report).",
+                "2. Tổng quan dự án: Tóm tắt dự án.",
+                "3. Quản trị hành chính: Quản lý hành chính dự án.",
+                "4. Hoạt động đã thực hiện: Các hoạt động hoàn thành (lấy từ dev_progress_report).",
+                "5. Vấn đề/chậm trễ: Các vấn đề và chậm trễ gặp phải.",
+                "6. Vấn đề cần xử lý: Các vấn đề cần giải quyết.",
+                "7. Hoạt động dự kiến: Kế hoạch cho kỳ tới.",
+                "8. Trạng thái deliverables: Trạng thái các sản phẩm bàn giao.",
+                "9. Nhiệm vụ WBS: Hoàn thành, quá hạn, sắp đến.",
+                "10. Thay đổi: Thay đổi đang mở, đã duyệt, bị từ chối.",
+                "11. Rủi ro: Rủi ro đang mở, đã xử lý.",
+                shared_memory.load("test_summary_report") or "Không có dữ liệu",
+                shared_memory.load("dev_progress_report") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/5_testing/Project_Status_Report.docx"
+        ) and shared_memory.save("project_status_report", output)
+    )
+
+    tasks.extend([
+        doc_qa_checklist_task,
+        test_scenarios_task,
         test_plan_task,
-        test_case_task,
-        test_exec_task,
-        security_perf_test_task,
-        audit_task,
-        test_management_task,
-        quality_gate_testing_task
-    ]
+        system_qa_checklist_task,
+        system_test_plan_task,
+        uat_plan_task,
+        test_case_spec_task,
+        bug_report_task,
+        bug_list_task,
+        regression_test_plan_task,
+        project_acceptance_task,
+        test_summary_report_task,
+        risk_management_register_task,
+        project_status_report_task
+    ])
+
+    return tasks

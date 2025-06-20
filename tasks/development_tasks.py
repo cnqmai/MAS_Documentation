@@ -1,353 +1,326 @@
-import os
-import logging
-import re
 from crewai import Task
-from textwrap import dedent
-from utils.file_writer import write_output
-from memory.shared_memory import shared_memory
-from docx import Document
-from docx.shared import Inches
-import graphviz
+from utils.output_formats import create_docx, create_xlsx
+from memory.shared_memory import SharedMemory
+import os
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def process_and_create_dev_guidelines_doc(task_output: str, output_base_dir_param: str):
-    logging.info(f"--- Bắt đầu xử lý output cho Hướng dẫn Phát triển ---")
-    doc = Document()
-    doc.add_heading('Tài liệu Hướng dẫn Phát triển', level=1)
-
-    dot_blocks = re.findall(r'```dot\s*([\s\S]*?)\s*```', task_output)
-    text_content = re.sub(r'```dot\s*[\s\S]*?```', '', task_output).strip()
-
-    guidelines_text = text_content # Giả định phần còn lại là văn bản
-    component_diagram_dot_code = ""
-
-    if len(dot_blocks) >= 1:
-        component_diagram_dot_code = dot_blocks[0]
-        logging.info("Đã trích xuất mã DOT cho Component Diagram.")
-
-    # Thêm nội dung văn bản
-    if guidelines_text:
-        doc.add_heading('Tiêu chuẩn Mã hóa và Hướng dẫn Phát triển', level=2)
-        doc.add_paragraph(guidelines_text)
-    else:
-        doc.add_paragraph("Không có nội dung hướng dẫn phát triển dạng văn bản được tạo.")
-
-    # Đảm bảo thư mục con tồn tại cho output của phase này
-    phase_output_dir = os.path.join(output_base_dir_param, "4_development")
-    os.makedirs(phase_output_dir, exist_ok=True)
-    logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 4: {phase_output_dir}")
-
-    # Render Component Diagram
-    if component_diagram_dot_code:
-        try:
-            graph_component = graphviz.Source(component_diagram_dot_code, format='png', engine='dot')
-            component_img_path = os.path.join(phase_output_dir, "component_diagram.png")
-            graph_component.render(component_img_path.rsplit('.', 1)[0], view=False, cleanup=True)
-            doc.add_heading('Component Diagram', level=2)
-            doc.add_picture(component_img_path, width=Inches(6.0))
-            logging.info(f"Đã tạo và chèn Component Diagram vào tài liệu: {component_img_path}")
-        except Exception as e:
-            logging.error(f"Lỗi khi tạo Component Diagram: {e}", exc_info=True)
-            doc.add_paragraph(f"Không thể tạo Component Diagram do lỗi: {e}\nMã DOT thất bại:\n```dot\n{component_diagram_dot_code}\n```")
-    else:
-        doc.add_paragraph("Agent không tạo ra mã DOT cho Component Diagram.")
-
-    final_doc_path = os.path.join(phase_output_dir, "Coding_Standards_and_Guidelines_with_Diagram.docx")
-    doc.save(final_doc_path)
-    logging.info(f"Đã lưu tài liệu Coding_Standards_and_Guidelines_with_Diagram.docx vào {final_doc_path}")
-
-    shared_memory.set("phase_4_development", "coding_standards_document_path", final_doc_path)
-    logging.info(f"--- Hoàn thành xử lý output cho Hướng dẫn Phát triển ---")
-
-
-def create_development_tasks(development_agent, project_manager_agent, output_base_dir):
+def create_development_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, development_agent):
     """
-    Tạo các task liên quan đến giai đoạn Phát triển.
-    Args:
-        development_agent: Agent chính cho Development.
-        project_manager_agent: Agent chung.
-        output_base_dir: Đường dẫn thư mục base.
-    Returns:
-        list: Danh sách các Task đã tạo.
+    Tạo các tác vụ cho giai đoạn Phát triển (Development Phase).
     """
-    system_design_doc = shared_memory.get("phase_3_design", "system_architecture") # Assuming this maps to System_Architecture.docx
-    db_design_doc = shared_memory.get("phase_3_design", "database_design_document")
-    api_design_doc = shared_memory.get("phase_3_design", "api_design_document")
-    hld_doc = shared_memory.get("phase_3_design", "hld_document_path") # Assuming this maps to High_Level_Design.docx
-    lld_doc = shared_memory.get("phase_3_design", "lld") # Assuming this maps to Low_Level_Design.docx
-    technical_requirements_doc = shared_memory.get("phase_3_design", "technical_requirements_document") # Assuming this maps to Technical_Requirements_Document.docx
-    coding_guidelines_doc_path = shared_memory.get("phase_4_development", "coding_standards_document_path") # Output from dev_standards_tasks
+    tasks = []
 
-    # Mock inputs if not available from previous phases for demonstration
-    # In a real scenario, these would come from actual files or previous task outputs
-    configuration_management_plan_doc = "Configuration_Management_Plan.docx (Mock Content)"
-    project_plan_xml = "Project_Plan.xml (Mock Content)"
-    integration_plan_md = "Integration_Plan.md (Mock Content)"
-    coding_guidelines_md = "Coding_Guidelines.md (Mock Content)" # This will be the output from dev_standards_task
-
-    design_context_for_dev = f"System Design Document: {system_design_doc[:500] if system_design_doc else 'N/A'}\n" \
-                             f"Database Design (Content Snippet): {db_design_doc[:500] if db_design_doc else 'N/A'}\n" \
-                             f"API Design (Content Snippet): {api_design_doc[:500] if api_design_doc else 'N/A'}\n" \
-                             f"HLD (Content Snippet): {hld_doc[:500] if hld_doc else 'N/A'}\n" \
-                             f"LLD (Content Snippet): {lld_doc[:500] if lld_doc else 'N/A'}\n" \
-                             f"Technical Requirements (Content Snippet): {technical_requirements_doc[:500] if technical_requirements_doc else 'N/A'}"
-    if not any([system_design_doc, db_design_doc, api_design_doc, hld_doc, lld_doc, technical_requirements_doc]):
-        logging.warning("Design documents missing for development tasks.")
-        design_context_for_dev = "Không có tài liệu thiết kế nào được tìm thấy."
-
-
-    # Tạo thư mục con cho Phase 4 Development (nếu chưa có)
-    phase_output_dir = os.path.join(output_base_dir, "4_development")
-    os.makedirs(phase_output_dir, exist_ok=True)
-    logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 4: {phase_output_dir}")
-
-
-    # dev_standards_tasks.py
-    # Inputs: Configuration_Management_Plan.docx, Project_Plan.xml
-    # Outputs: Development_Standards_Document.md, Coding_Guidelines.md
-    # NOTE: The current callback 'process_and_create_dev_guidelines_doc' combines these into a .docx with diagram.
-    # The expected_output is adjusted to reflect the actual file created by the callback.
+    # Tác vụ tạo Development Standards Document
     dev_standards_task = Task(
-        description=dedent(f"""
-            Dựa trên tài liệu 'Configuration_Management_Plan.docx' và 'Project_Plan.xml', tạo ra một bộ tiêu chuẩn mã hóa (Coding Standards) và hướng dẫn phát triển (Development Guidelines)
-            cho dự án. Bao gồm quy tắc đặt tên, cấu trúc thư mục, quy ước comment, và các thực hành tốt nhất cho ngôn ngữ/framework được chọn.
-            Bạn cũng phải **tạo mã nguồn Graphviz DOT** cho một Component Diagram đơn giản minh họa các module chính hoặc layer của ứng dụng
-            dựa trên thiết kế đã có.
-            Cấu trúc đầu ra của bạn phải là văn bản hướng dẫn, sau đó là mã DOT cho Component Diagram
-            (trong '```dot\\n...\\n```').
-            --- Inputs: Configuration Management Plan: {configuration_management_plan_doc}, Project Plan: {project_plan_xml}
-            --- Design Context: {design_context_for_dev}
-        """),
-        expected_output=dedent("""Một chuỗi văn bản (string) bao gồm:
-            1. Phần mô tả Tiêu chuẩn Mã hóa và Hướng dẫn Phát triển.
-            2. Tiếp theo là mã Graphviz DOT cho Component Diagram được bọc trong '```dot\\n...\\n```'.
-            Đảm bảo mã DOT đúng cú pháp để có thể render thành hình ảnh. (Sẽ được lưu thành 'Coding_Standards_and_Guidelines_with_Diagram.docx')"""),
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Tiêu chuẩn phát triển (Development Standards Document) dựa trên dữ liệu từ `technical_requirements` và `project_plan` trong SharedMemory. "
+            "Tài liệu này xác định các tiêu chuẩn phát triển phần mềm để đảm bảo chất lượng mã nguồn và tuân thủ yêu cầu kỹ thuật. "
+            "Nội dung phải bao gồm: mục đích, phạm vi, tiêu chuẩn mã hóa, công cụ phát triển, quy trình kiểm soát chất lượng, yêu cầu tài liệu, tiêu chuẩn hiệu suất và bảo mật. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Development_Standards_Document.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `dev_standards`."
+        ),
         agent=development_agent,
-        callback=lambda output: process_and_create_dev_guidelines_doc(str(output), output_base_dir)
+        expected_output=(
+            "Tài liệu `Development_Standards_Document.docx` chứa tiêu chuẩn phát triển, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `dev_standards`."
+        ),
+        callback=lambda output: create_docx(
+            "Tiêu chuẩn phát triển",
+            [
+                "1. Mục đích: Mục tiêu của tiêu chuẩn phát triển (lấy từ technical_requirements).",
+                "2. Phạm vi: Phạm vi áp dụng của tiêu chuẩn.",
+                "3. Tiêu chuẩn mã hóa: Quy tắc và chuẩn mã hóa (lấy từ project_plan).",
+                "4. Công cụ phát triển: Các công cụ và môi trường phát triển.",
+                "5. Kiểm soát chất lượng: Quy trình kiểm tra và đánh giá mã.",
+                "6. Yêu cầu tài liệu: Tiêu chuẩn tài liệu mã nguồn.",
+                "7. Hiệu suất và bảo mật: Yêu cầu về hiệu suất và bảo mật.",
+                shared_memory.load("technical_requirements") or "Không có dữ liệu",
+                shared_memory.load("project_plan") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Development_Standards_Document.docx"
+        ) and shared_memory.save("dev_standards", output)
     )
 
-    # source_control_tasks.py
-    # Inputs: Development_Standards_Document.md, Coding_Guidelines.md (These are outputs from dev_standards_task)
-    # Outputs: Version_Control_Plan.md, Source_Code_Repository_Checklist.md
-    def source_control_callback(output):
-        logging.info(f"--- Hoàn thành Source Control Task ---")
-        parts = output.raw.split("--- SOURCE_CODE_REPOSITORY_CHECKLIST ---")
-        version_control_content = parts[0].strip()
-        repository_checklist_content = parts[1].strip() if len(parts) > 1 else "Không có checklist repository được tạo."
-
-        write_output(os.path.join(phase_output_dir, "Version_Control_Plan.md"), version_control_content)
-        shared_memory.set("phase_4_development", "version_control_plan", version_control_content)
-        logging.info(f"Đã lưu Version_Control_Plan.md và cập nhật shared_memory.")
-
-        write_output(os.path.join(phase_output_dir, "Source_Code_Repository_Checklist.md"), repository_checklist_content)
-        shared_memory.set("phase_4_development", "source_code_repository_checklist", repository_checklist_content)
-        logging.info(f"Đã lưu Source_Code_Repository_Checklist.md và cập nhật shared_memory.")
-
-    source_control_task = Task(
-        description=dedent(f"""
-            Phát triển chiến lược quản lý mã nguồn (Source Control Strategy) cho dự án.
-            Xác định công cụ (Git), quy trình branching (ví dụ: Gitflow), và quy tắc commit.
-            Tạo thêm một checklist cho việc cấu hình repository mã nguồn.
-            --- Inputs: Development Standards & Guidelines (from previous task)
-            --- Context: {dev_standards_task.output.raw_output if dev_standards_task.output else 'Chưa có Standards và Guidelines.'}
-        """),
-        expected_output=dedent("""Một chuỗi văn bản (string) bao gồm:
-            1. Nội dung của Version_Control_Plan.md.
-            2. Tiếp theo là dấu phân cách '--- SOURCE_CODE_REPOSITORY_CHECKLIST ---'.
-            3. Nội dung của Source_Code_Repository_Checklist.md."""),
+    # Tác vụ tạo Coding Guidelines
+    coding_guidelines_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Hướng dẫn mã hóa (Coding Guidelines) dựa trên dữ liệu từ `dev_standards` trong SharedMemory. "
+            "Tài liệu này cung cấp các quy tắc cụ thể để viết mã nguồn, đảm bảo tính nhất quán, dễ đọc, và dễ bảo trì. "
+            "Nội dung phải bao gồm: phong cách mã hóa, quy ước đặt tên, cấu trúc mã, quản lý lỗi, bình luận mã, và các ví dụ minh họa. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Coding_Guidelines.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `coding_guidelines`."
+        ),
         agent=development_agent,
-        context=[dev_standards_task],
-        callback=source_control_callback
+        expected_output=(
+            "Tài liệu `Coding_Guidelines.docx` chứa hướng dẫn mã hóa, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `coding_guidelines`."
+        ),
+        callback=lambda output: create_docx(
+            "Hướng dẫn mã hóa",
+            [
+                "1. Phong cách mã hóa: Quy tắc về định dạng mã (lấy từ dev_standards).",
+                "2. Quy ước đặt tên: Quy tắc đặt tên biến, hàm, và lớp.",
+                "3. Cấu trúc mã: Tổ chức mã nguồn và cấu trúc thư mục.",
+                "4. Quản lý lỗi: Xử lý ngoại lệ và lỗi.",
+                "5. Bình luận mã: Quy tắc viết bình luận và tài liệu mã.",
+                "6. Ví dụ minh họa: Các đoạn mã mẫu tuân thủ hướng dẫn.",
+                shared_memory.load("dev_standards") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Coding_Guidelines.docx"
+        ) and shared_memory.save("coding_guidelines", output)
     )
 
-    # integration_tasks.py
-    # Inputs: High-Level_Design.docx, API_Design_Document.yaml
-    # Outputs: Integration_Plan.md, Unit_Test_Scripts_Template.txt
-    def integration_callback(output):
-        logging.info(f"--- Hoàn thành Integration Task ---")
-        parts = output.raw.split("--- UNIT_TEST_SCRIPTS_TEMPLATE ---")
-        integration_plan_content = parts[0].strip()
-        unit_test_template_content = parts[1].strip() if len(parts) > 1 else "Không có template test unit được tạo."
-
-        write_output(os.path.join(phase_output_dir, "Integration_Plan.md"), integration_plan_content)
-        shared_memory.set("phase_4_development", "integration_plan", integration_plan_content)
-        logging.info(f"Đã lưu Integration_Plan.md và cập nhật shared_memory.")
-
-        write_output(os.path.join(phase_output_dir, "Unit_Test_Scripts_Template.txt"), unit_test_template_content)
-        shared_memory.set("phase_4_development", "unit_test_scripts_template", unit_test_template_content)
-        logging.info(f"Đã lưu Unit_Test_Scripts_Template.txt và cập nhật shared_memory.")
-
-    integration_task = Task(
-        description=dedent(f"""
-            Dựa trên 'High-Level_Design.docx' và 'API_Design_Document.yaml', tạo kế hoạch tích hợp (Integration Plan) chi tiết.
-            Xác định các giai đoạn tích hợp, chiến lược, và trách nhiệm.
-            Đồng thời, tạo một template cho các script kiểm thử đơn vị (Unit Test Scripts Template).
-            --- Inputs: HLD: {hld_doc[:500] if hld_doc else 'N/A'}, API Design: {api_design_doc[:500] if api_design_doc else 'N/A'}
-            --- Context: {source_control_task.output.raw_output if source_control_task.output else 'Chưa có Source Control Strategy.'}
-        """),
-        expected_output=dedent("""Một chuỗi văn bản (string) bao gồm:
-            1. Nội dung của Integration_Plan.md.
-            2. Tiếp theo là dấu phân cách '--- UNIT_TEST_SCRIPTS_TEMPLATE ---'.
-            3. Nội dung của Unit_Test_Scripts_Template.txt."""),
+    # Tác vụ tạo Version Control Plan
+    version_control_plan_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Kế hoạch kiểm soát phiên bản (Version Control Plan) dựa trên dữ liệu từ `dev_standards` trong SharedMemory. "
+            "Tài liệu này mô tả quy trình quản lý phiên bản mã nguồn, đảm bảo tính nhất quán và khả năng truy vết. "
+            "Nội dung phải bao gồm: mục đích, công cụ kiểm soát phiên bản, quy trình branch và merge, quy tắc commit, quản lý tag và release, quy trình sao lưu. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Version_Control_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `version_control_plan`."
+        ),
         agent=development_agent,
-        context=[source_control_task],
-        callback=integration_callback
+        expected_output=(
+            "Tài liệu `Version_Control_Plan.docx` chứa kế hoạch kiểm soát phiên bản, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `version_control_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch kiểm soát phiên bản",
+            [
+                "1. Mục đích: Mục tiêu của kiểm soát phiên bản (lấy từ dev_standards).",
+                "2. Công cụ: Công cụ kiểm soát phiên bản (Git, SVN, v.v.).",
+                "3. Quy trình branch và merge: Quy tắc tạo branch và merge mã.",
+                "4. Quy tắc commit: Quy tắc viết thông điệp commit.",
+                "5. Quản lý tag và release: Quy trình đánh tag và phát hành.",
+                "6. Sao lưu: Quy trình sao lưu kho mã nguồn.",
+                shared_memory.load("dev_standards") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Version_Control_Plan.docx"
+        ) and shared_memory.save("version_control_plan", output)
     )
 
-    # build_tasks.py
-    # Inputs: System_Architecture.docx, Integration_Plan.md, Configuration_Management_Plan.docx
-    # Outputs: Build_and_Deployment_Plan.docx, Build_Verification_Report_Template.docx
-    def build_callback(output):
-        logging.info(f"--- Hoàn thành Build Task ---")
-        parts = output.raw.split("--- BUILD_VERIFICATION_REPORT_TEMPLATE ---")
-        build_deploy_plan_content = parts[0].strip()
-        bvr_template_content = parts[1].strip() if len(parts) > 1 else "Không có template báo cáo xác minh build được tạo."
-
-        write_output(os.path.join(phase_output_dir, "Build_and_Deployment_Plan.docx"), build_deploy_plan_content)
-        shared_memory.set("phase_4_development", "build_deployment_plan", build_deploy_plan_content)
-        logging.info(f"Đã lưu Build_and_Deployment_Plan.docx và cập nhật shared_memory.")
-
-        write_output(os.path.join(phase_output_dir, "Build_Verification_Report_Template.docx"), bvr_template_content)
-        shared_memory.set("phase_4_development", "build_verification_report_template", bvr_template_content)
-        logging.info(f"Đã lưu Build_Verification_Report_Template.docx và cập nhật shared_memory.")
-
-    build_task = Task(
-        description=dedent(f"""
-            Dựa trên 'System_Architecture.docx', 'Integration_Plan.md', và 'Configuration_Management_Plan.docx',
-            xây dựng tài liệu kế hoạch Build và Deployment chi tiết.
-            Bao gồm các bước build, môi trường, công cụ, và quy trình triển khai.
-            Đồng thời, tạo một template cho báo cáo xác minh build (Build Verification Report Template).
-            --- Inputs: System Architecture: {system_design_doc[:500] if system_design_doc else 'N/A'},
-                         Integration Plan: {integration_plan_md},
-                         Configuration Management Plan: {configuration_management_plan_doc}
-            --- Context: {integration_task.output.raw_output if integration_task.output else 'Chưa có Integration Plan.'}
-        """),
-        expected_output=dedent("""Một chuỗi văn bản (string) bao gồm:
-            1. Nội dung của Build_and_Deployment_Plan.docx.
-            2. Tiếp theo là dấu phân cách '--- BUILD_VERIFICATION_REPORT_TEMPLATE ---'.
-            3. Nội dung của Build_Verification_Report_Template.docx."""),
+    # Tác vụ tạo Integration Plan
+    integration_plan_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Kế hoạch tích hợp (Integration Plan) dựa trên dữ liệu từ `system_architecture` và `api_design` trong SharedMemory. "
+            "Tài liệu này mô tả quy trình tích hợp các thành phần hệ thống, bao gồm API và các module khác. "
+            "Nội dung phải bao gồm: mục đích, phạm vi, chiến lược tích hợp, lịch trình tích hợp, các thành phần tích hợp, yêu cầu môi trường, quy trình kiểm thử tích hợp. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Integration_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `integration_plan`."
+        ),
         agent=development_agent,
-        context=[integration_task],
-        callback=build_callback
+        expected_output=(
+            "Tài liệu `Integration_Plan.docx` chứa kế hoạch tích hợp, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `integration_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch tích hợp",
+            [
+                "1. Mục đích: Mục tiêu của kế hoạch tích hợp (lấy từ system_architecture).",
+                "2. Phạm vi: Phạm vi tích hợp các thành phần hệ thống.",
+                "3. Chiến lược tích hợp: Phương pháp tích hợp (top-down, bottom-up).",
+                "4. Lịch trình: Lịch trình tích hợp các thành phần.",
+                "5. Thành phần tích hợp: Các module và API (lấy từ api_design).",
+                "6. Yêu cầu môi trường: Môi trường cần thiết để tích hợp.",
+                "7. Kiểm thử tích hợp: Quy trình kiểm thử tích hợp.",
+                shared_memory.load("system_architecture") or "Không có dữ liệu",
+                shared_memory.load("api_design") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Integration_Plan.docx"
+        ) and shared_memory.save("integration_plan", output)
     )
 
-    # dev_docs_tasks.py
-    # Inputs: Low-Level_Design.docx
-    # Outputs: Source_Code_Documentation_Template.md, Development_Progress_Report_Template.docx, Middleware_Documentation.md
-    def dev_docs_callback(output):
-        logging.info(f"--- Hoàn thành Development Documentation Task ---")
-        parts = output.raw.split("--- DEVELOPMENT_PROGRESS_REPORT_TEMPLATE ---")
-        source_code_doc_template = parts[0].strip()
-        remaining_content = parts[1].strip() if len(parts) > 1 else ""
-        parts_2 = remaining_content.split("--- MIDDLEWARE_DOCUMENTATION ---")
-        dev_progress_report_template = parts_2[0].strip()
-        middleware_doc_content = parts_2[1].strip() if len(parts_2) > 1 else "Không có tài liệu middleware được tạo."
-
-        write_output(os.path.join(phase_output_dir, "Source_Code_Documentation_Template.md"), source_code_doc_template)
-        shared_memory.set("phase_4_development", "source_code_doc_template", source_code_doc_template)
-        logging.info(f"Đã lưu Source_Code_Documentation_Template.md và cập nhật shared_memory.")
-
-        write_output(os.path.join(phase_output_dir, "Development_Progress_Report_Template.docx"), dev_progress_report_template)
-        shared_memory.set("phase_4_development", "dev_progress_report_template", dev_progress_report_template)
-        logging.info(f"Đã lưu Development_Progress_Report_Template.docx và cập nhật shared_memory.")
-
-        write_output(os.path.join(phase_output_dir, "Middleware_Documentation.md"), middleware_doc_content)
-        shared_memory.set("phase_4_development", "middleware_documentation", middleware_doc_content)
-        logging.info(f"Đã lưu Middleware_Documentation.md và cập nhật shared_memory.")
-
-    dev_docs_task = Task(
-        description=dedent(f"""
-            Dựa trên 'Low-Level_Design.docx', tạo các tài liệu hỗ trợ phát triển:
-            1. Template tài liệu mã nguồn (Source Code Documentation Template).
-            2. Template báo cáo tiến độ phát triển (Development Progress Report Template).
-            3. Tài liệu về Middleware được sử dụng (Middleware Documentation).
-            --- Inputs: LLD: {lld_doc[:500] if lld_doc else 'N/A'}
-            --- Context: {build_task.output.raw_output if build_task.output else 'Chưa có Build Plan.'}
-        """),
-        expected_output=dedent("""Một chuỗi văn bản (string) bao gồm:
-            1. Nội dung của Source_Code_Documentation_Template.md.
-            2. Tiếp theo là dấu phân cách '--- DEVELOPMENT_PROGRESS_REPORT_TEMPLATE ---'.
-            3. Nội dung của Development_Progress_Report_Template.docx.
-            4. Tiếp theo là dấu phân cách '--- MIDDLEWARE_DOCUMENTATION ---'.
-            5. Nội dung của Middleware_Documentation.md."""),
-        agent=development_agent,
-        context=[build_task],
-        callback=dev_docs_callback
-    )
-
-    # code_review_tasks.py
-    # Inputs: Coding_Guidelines.md, Technical_Requirements_Document.docx
-    # Outputs: Code_Review_Checklist.md
-    def code_review_callback(output):
-        logging.info(f"--- Hoàn thành Code Review Task ---")
-        write_output(os.path.join(phase_output_dir, "Code_Review_Checklist.md"), str(output))
-        shared_memory.set("phase_4_development", "code_review_checklist", str(output))
-        logging.info(f"Đã lưu Code_Review_Checklist.md và cập nhật shared_memory.")
-
-    code_review_task = Task(
-        description=dedent(f"""
-            Dựa trên 'Coding_Guidelines.md' và 'Technical_Requirements_Document.docx',
-            tạo một checklist kiểm tra mã nguồn (Code Review Checklist).
-            Checklist này sẽ được sử dụng để đảm bảo chất lượng mã nguồn và tuân thủ tiêu chuẩn.
-            --- Inputs: Coding Guidelines: {coding_guidelines_doc_path if coding_guidelines_doc_path else 'N/A'},
-                         Technical Requirements: {technical_requirements_doc[:500] if technical_requirements_doc else 'N/A'}
-            --- Context: {dev_docs_task.output.raw_output if dev_docs_task.output else 'Chưa có Development Documents.'}
-        """),
-        expected_output="Tài liệu tiếng Việt 'Code_Review_Checklist.md' mô tả checklist kiểm tra mã nguồn.",
-        agent=development_agent,
-        context=[dev_docs_task], # Context should be from dev_standards_task or its output for coding_guidelines
-        callback=code_review_callback
-    )
-
-
-    # Task: Development Quality Gate (Project Manager)
-    def development_validation_callback(output):
-        logging.info(f"--- Hoàn thành Development Validation Task ---")
-        write_output(os.path.join(phase_output_dir, "Validation_Report_Phase_4.md"), str(output))
-        shared_memory.set("phase_4_development", "validation_report", str(output))
-        logging.info(f"Đã lưu Validation_Report_Phase_4.md và cập nhật shared_memory.")
-
-    development_validation_task = Task(
-        description=dedent(f"""
-            Đánh giá các tài liệu phát triển (Coding Standards, Source Control Strategy, Integration Plan, Build/Deployment Process, Development Docs, Code Review Checklist).
-            Kiểm tra tính hoàn chỉnh, khả thi, tuân thủ tiêu chuẩn và yêu cầu thiết kế.
-            Tạo báo cáo 'Validation_Report_Phase_4.md' tóm tắt kết quả đánh giá,
-            liệt kê các điểm cần cải thiện nếu có và xác nhận hoàn thành giai đoạn.
-        """),
-        expected_output="Tài liệu tiếng Việt 'Validation_Report_Phase_4.md' tóm tắt kết quả đánh giá giai đoạn phát triển.",
+    # Tác vụ tạo Code Review Checklist
+    code_review_checklist_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Danh sách kiểm tra đánh giá mã nguồn (Code Review Checklist) dựa trên dữ liệu từ `coding_guidelines` và `technical_requirements` trong SharedMemory. "
+            "Tài liệu này đảm bảo chất lượng mã nguồn bằng cách kiểm tra tính tuân thủ các tiêu chuẩn mã hóa và yêu cầu kỹ thuật. "
+            "Nội dung phải bao gồm: cấu trúc mã, tài liệu, biến, kiểu dữ liệu, phong cách lập trình, cấu trúc điều khiển, vòng lặp, bảo trì, bảo mật, kiểm tra lỗi, xử lý ngoại lệ, thử nghiệm, xác thực. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Code_Review_Checklist.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `code_review_checklist`."
+        ),
         agent=project_manager_agent,
-        context=[dev_standards_task, source_control_task, integration_task, build_task, dev_docs_task, code_review_task],
-        callback=development_validation_callback
+        expected_output=(
+            "Tài liệu `Code_Review_Checklist.docx` chứa danh sách kiểm tra đánh giá mã nguồn, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `code_review_checklist`."
+        ),
+        callback=lambda output: create_docx(
+            "Danh sách kiểm tra đánh giá mã nguồn",
+            [
+                "1. Cấu trúc mã: Cấu trúc và tổ chức mã nguồn (lấy từ coding_guidelines).",
+                "2. Tài liệu: Bình luận và tài liệu mã (lấy từ technical_requirements).",
+                "3. Biến và kiểu dữ liệu: Kiểm tra biến và kiểu dữ liệu.",
+                "4. Phong cách lập trình: Tuân thủ chuẩn mã hóa.",
+                "5. Điều khiển và vòng lặp: Cấu trúc điều khiển và vòng lặp.",
+                "6. Bảo mật và bảo trì: Các biện pháp bảo mật và khả năng bảo trì.",
+                "7. Kiểm tra lỗi: Xử lý ngoại lệ và kiểm tra lỗi.",
+                shared_memory.load("coding_guidelines") or "Không có dữ liệu",
+                shared_memory.load("technical_requirements") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Code_Review_Checklist.docx"
+        ) and shared_memory.save("code_review_checklist", output)
     )
 
-    # # Task: Research Development Best Practices (Researcher)
-    # def research_development_best_practices_callback(output):
-    #     logging.info(f"--- Hoàn thành Research Development Best Practices Task ---")
-    #     write_output(os.path.join(phase_output_dir, "Development_Research_Summary.md"), str(output))
-    #     shared_memory.set("phase_4_development", "research_summary", str(output))
-    #     logging.info(f"Đã lưu Development_Research_Summary.md và cập nhật shared_memory.")
+    # Tác vụ tạo Source Code Repository Checklist
+    source_code_repo_checklist_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Danh sách kiểm tra kho mã nguồn (Source Code Repository Checklist) dựa trên dữ liệu từ `version_control_plan` trong SharedMemory. "
+            "Tài liệu này đảm bảo kho mã nguồn được thiết lập và quản lý đúng cách. "
+            "Nội dung phải bao gồm: cấu hình kho mã, quyền truy cập, cấu trúc thư mục, quy tắc commit, kiểm tra bảo mật, sao lưu, và giám sát kho. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Source_Code_Repository_Checklist.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `source_code_repo_checklist`."
+        ),
+        agent=development_agent,
+        expected_output=(
+            "Tài liệu `Source_Code_Repository_Checklist.docx` chứa danh sách kiểm tra kho mã nguồn, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `source_code_repo_checklist`."
+        ),
+        callback=lambda output: create_docx(
+            "Danh sách kiểm tra kho mã nguồn",
+            [
+                "1. Cấu hình kho mã: Thiết lập kho mã nguồn (lấy từ version_control_plan).",
+                "2. Quyền truy cập: Phân quyền truy cập kho mã.",
+                "3. Cấu trúc thư mục: Tổ chức thư mục trong kho.",
+                "4. Quy tắc commit: Quy tắc commit mã nguồn.",
+                "5. Bảo mật: Kiểm tra bảo mật kho mã.",
+                "6. Sao lưu: Quy trình sao lưu kho mã.",
+                "7. Giám sát: Giám sát hoạt động kho mã.",
+                shared_memory.load("version_control_plan") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Source_Code_Repository_Checklist.docx"
+        ) and shared_memory.save("source_code_repo_checklist", output)
+    )
 
-    # research_development_best_practices_task = Task(
-    #     description=dedent(f"""
-    #         Nghiên cứu các phương pháp hay nhất (best practices) trong phát triển phần mềm
-    #         (ví dụ: Clean Code, TDD, DDD, kiến trúc phần mềm, quản lý dependency).
-    #         Tổng hợp kiến thức hỗ trợ các agent khác.
-    #         --- Design Context: {design_context_for_dev}
-    #     """),
-    #     expected_output="Tài liệu tiếng Việt 'Development_Research_Summary.md' tổng hợp các kiến thức nghiên cứu hữu ích.",
-    #     agent=researcher_agent,
-    #     context=[dev_standards_task], # Context could be broader, but starts with standards.
-    #     callback=research_development_best_practices_callback
-    # )
+    # Tác vụ tạo Development Progress Report
+    dev_progress_report_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Báo cáo tiến độ phát triển (Development Progress Report) dựa trên dữ liệu từ `project_plan` và `wbs` trong SharedMemory. "
+            "Tài liệu này theo dõi tiến độ phát triển, bao gồm các nhiệm vụ đã hoàn thành, đang thực hiện, và các vấn đề phát sinh. "
+            "Nội dung phải bao gồm: tổng quan tiến độ, nhiệm vụ hoàn thành, nhiệm vụ đang thực hiện, rủi ro và vấn đề, kế hoạch tiếp theo. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Development_Progress_Report.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `dev_progress_report`."
+        ),
+        agent=development_agent,
+        expected_output=(
+            "Tài liệu `Development_Progress_Report.docx` chứa báo cáo tiến độ phát triển, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `dev_progress_report`."
+        ),
+        callback=lambda output: create_docx(
+            "Báo cáo tiến độ phát triển",
+            [
+                "1. Tổng quan tiến độ: Tóm tắt tiến độ dự án (lấy từ project_plan).",
+                "2. Nhiệm vụ hoàn thành: Các nhiệm vụ đã hoàn thành (lấy từ wbs).",
+                "3. Nhiệm vụ đang thực hiện: Các nhiệm vụ đang tiến hành.",
+                "4. Rủi ro và vấn đề: Các vấn đề phát sinh và rủi ro.",
+                "5. Kế hoạch tiếp theo: Các bước tiếp theo trong phát triển.",
+                shared_memory.load("project_plan") or "Không có dữ liệu",
+                shared_memory.load("wbs") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Development_Progress_Report.docx"
+        ) and shared_memory.save("dev_progress_report", output)
+    )
 
-    return [
-        dev_standards_task, # dev_standards_tasks.py
-        source_control_task, # source_control_tasks.py
-        integration_task, # integration_tasks.py
-        build_task, # build_tasks.py
-        dev_docs_task, # dev_docs_tasks.py
-        code_review_task, # code_review_tasks.py
-        development_validation_task,
-        # research_development_best_practices_task
-    ]
+    # Tác vụ tạo Build and Deployment Plan
+    build_deployment_plan_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Kế hoạch xây dựng và triển khai (Build and Deployment Plan) dựa trên dữ liệu từ `integration_plan` và `system_architecture` trong SharedMemory. "
+            "Tài liệu này mô tả quy trình xây dựng và triển khai hệ thống, đảm bảo hệ thống được triển khai chính xác và ổn định. "
+            "Nội dung phải bao gồm: mục đích, chiến lược xây dựng, công cụ xây dựng, quy trình triển khai, môi trường triển khai, kiểm thử sau triển khai, kế hoạch rollback. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Build_and_Deployment_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `build_deployment_plan`."
+        ),
+        agent=development_agent,
+        expected_output=(
+            "Tài liệu `Build_and_Deployment_Plan.docx` chứa kế hoạch xây dựng và triển khai, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `build_deployment_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch xây dựng và triển khai",
+            [
+                "1. Mục đích: Mục tiêu của kế hoạch triển khai (lấy từ integration_plan).",
+                "2. Chiến lược xây dựng: Quy trình xây dựng hệ thống.",
+                "3. Công cụ xây dựng: Các công cụ CI/CD (lấy từ system_architecture).",
+                "4. Quy trình triển khai: Các bước triển khai hệ thống.",
+                "5. Môi trường triển khai: Môi trường staging và production.",
+                "6. Kiểm thử sau triển khai: Quy trình kiểm thử sau triển khai.",
+                "7. Kế hoạch rollback: Kế hoạch khôi phục nếu triển khai thất bại.",
+                shared_memory.load("integration_plan") or "Không có dữ liệu",
+                shared_memory.load("system_architecture") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Build_and_Deployment_Plan.docx"
+        ) and shared_memory.save("build_deployment_plan", output)
+    )
+
+    # Tác vụ tạo Middleware Documentation
+    middleware_documentation_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Tài liệu middleware (Middleware Documentation) dựa trên dữ liệu từ `integration_plan` và `api_design` trong SharedMemory. "
+            "Tài liệu này mô tả các thành phần middleware được sử dụng để tích hợp hệ thống. "
+            "Nội dung phải bao gồm: tổng quan middleware, các thành phần middleware, cấu hình, tích hợp API, hiệu suất và bảo mật, quy trình bảo trì. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Middleware_Documentation.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `middleware_documentation`."
+        ),
+        agent=development_agent,
+        expected_output=(
+            "Tài liệu `Middleware_Documentation.docx` chứa tài liệu middleware, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `middleware_documentation`."
+        ),
+        callback=lambda output: create_docx(
+            "Tài liệu middleware",
+            [
+                "1. Tổng quan middleware: Mô tả vai trò middleware (lấy từ integration_plan).",
+                "2. Thành phần middleware: Các thành phần middleware được sử dụng.",
+                "3. Cấu hình: Hướng dẫn cấu hình middleware.",
+                "4. Tích hợp API: Tích hợp với các API (lấy từ api_design).",
+                "5. Hiệu suất và bảo mật: Yêu cầu về hiệu suất và bảo mật.",
+                "6. Quy trình bảo trì: Bảo trì và giám sát middleware.",
+                shared_memory.load("integration_plan") or "Không có dữ liệu",
+                shared_memory.load("api_design") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Middleware_Documentation.docx"
+        ) and shared_memory.save("middleware_documentation", output)
+    )
+
+    # Tác vụ tạo Source Code Documentation
+    source_code_documentation_task = Task(
+        description=(
+            "Sử dụng công cụ `create_development_document` để tạo tài liệu Tài liệu mã nguồn (Source Code Documentation) dựa trên dữ liệu từ `lld` và `coding_guidelines` trong SharedMemory. "
+            "Tài liệu này cung cấp tài liệu chi tiết về mã nguồn, hỗ trợ bảo trì và phát triển tiếp theo. "
+            "Nội dung phải bao gồm: tổng quan mã nguồn, cấu trúc module, mô tả chức năng, bình luận mã, hướng dẫn sử dụng, các ví dụ mã. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/4_development` với tên `Source_Code_Documentation.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `source_code_documentation`."
+        ),
+        agent=development_agent,
+        expected_output=(
+            "Tài liệu `Source_Code_Documentation.docx` chứa tài liệu mã nguồn, "
+            "được lưu trong `output/4_development` và SharedMemory với khóa `source_code_documentation`."
+        ),
+        callback=lambda output: create_docx(
+            "Tài liệu mã nguồn",
+            [
+                "1. Tổng quan mã nguồn: Mô tả tổng thể mã nguồn (lấy từ lld).",
+                "2. Cấu trúc module: Tổ chức các module mã nguồn.",
+                "3. Mô tả chức năng: Chức năng của từng module.",
+                "4. Bình luận mã: Bình luận tuân thủ chuẩn (lấy từ coding_guidelines).",
+                "5. Hướng dẫn sử dụng: Cách sử dụng mã nguồn.",
+                "6. Ví dụ mã: Các đoạn mã minh họa.",
+                shared_memory.load("lld") or "Không có dữ liệu",
+                shared_memory.load("coding_guidelines") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/4_development/Source_Code_Documentation.docx"
+        ) and shared_memory.save("source_code_documentation", output)
+    )
+
+    tasks.extend([
+        dev_standards_task,
+        coding_guidelines_task,
+        version_control_plan_task,
+        integration_plan_task,
+        code_review_checklist_task,
+        source_code_repo_checklist_task,
+        dev_progress_report_task,
+        build_deployment_plan_task,
+        middleware_documentation_task,
+        source_code_documentation_task
+    ])
+
+    return tasks

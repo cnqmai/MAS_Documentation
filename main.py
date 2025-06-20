@@ -19,7 +19,7 @@ from agents.maintenance_agents import create_maintenance_agent
 from tasks.input_tasks import create_input_tasks
 from tasks.initiation_tasks import create_initiation_tasks
 from tasks.planning_tasks import create_planning_tasks
-from tasks.requirement_tasks import create_requirement_tasks
+from tasks.requirement_tasks import create_requirements_tasks
 from tasks.design_tasks import create_design_tasks
 from tasks.development_tasks import create_development_tasks
 from tasks.testing_tasks import create_testing_tasks
@@ -84,7 +84,7 @@ def main():
     print("##### KẾT THÚC GIAI ĐOẠN 2: LẬP KẾ HOẠCH #####\n")
 
     # Giai đoạn 3: Yêu cầu (Requirement)
-    requirement_tasks = create_requirement_tasks(shared_memory, OUTPUT_BASE_DIR, requirement_agent) # Đảm bảo requirement_agent được truyền vào nếu cần
+    requirement_tasks = create_requirements_tasks(shared_memory, OUTPUT_BASE_DIR, requirement_agent) # Đảm bảo requirement_agent được truyền vào nếu cần
     requirement_crew = Crew(
         agents=[input_agent, researcher_agent, project_manager_agent, requirement_agent],
         tasks=requirement_tasks,

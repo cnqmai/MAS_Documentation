@@ -1,237 +1,314 @@
-import os
-import logging
-import re
 from crewai import Task
-from utils.file_writer import write_output
-from memory.shared_memory import shared_memory
-from docx import Document
-from docx.shared import Inches
-import graphviz
+from utils.output_formats import create_docx
+from memory.shared_memory import SharedMemory
+import os
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def process_and_create_deployment_doc(task_output: str, output_base_dir_param: str):
-    logging.info(f"--- Bắt đầu xử lý output cho Kế hoạch Triển khai ---")
-    
-    dot_blocks = re.findall(r'```dot\s*([\s\S]*?)\s*```', task_output)
-    text_content = re.sub(r'```dot\s*[\s\S]*?```', '', task_output).strip()
-
-    deployment_plan_text = text_content # Phần văn bản của kế hoạch triển khai
-    deployment_diagram_dot_code = ""
-
-    if len(dot_blocks) >= 1:
-        deployment_diagram_dot_code = dot_blocks[0]
-        logging.info("Đã trích xuất mã DOT cho Deployment Diagram.")
-
-    # Đảm bảo thư mục con tồn tại cho output của phase này (Phase 6 - Deployment)
-    phase_output_dir = os.path.join(output_base_dir_param, "6_deployment")
-    os.makedirs(phase_output_dir, exist_ok=True)
-    logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 6: {phase_output_dir}")
-
-    # --- 1. Tạo Deployment_Plan.md ---
-    deployment_plan_md_path = os.path.join(phase_output_dir, "Deployment_Plan.md")
-    write_output(deployment_plan_md_path, deployment_plan_text)
-    logging.info(f"Đã lưu Deployment_Plan.md vào {deployment_plan_md_path}")
-    shared_memory.set("phase_6_deployment", "deployment_plan_md_path", deployment_plan_md_path)
-
-    def write_docx(file_path, content, heading):
-        """Tạo file .docx hợp lệ bằng python-docx."""
-        try:
-            doc = Document()
-            doc.add_heading(heading, level=1)
-            doc.add_paragraph(content)
-            doc.save(file_path)
-            logging.info(f"Đã lưu file DOCX hợp lệ: {file_path}")
-        except Exception as e:
-            logging.error(f"Lỗi khi lưu file DOCX {file_path}: {str(e)}")
-
-
-        production_impl_plan_docx_path = os.path.join(phase_output_dir, "Production_Implementation_Plan.docx")
-        doc.save(production_impl_plan_docx_path)
-        logging.info(f"Đã lưu tài liệu Production_Implementation_Plan.docx vào {production_impl_plan_docx_path}")
-        shared_memory.set("phase_6_deployment", "production_implementation_plan_docx_path", production_impl_plan_docx_path)
-
-        logging.info(f"--- Hoàn thành xử lý output cho Kế hoạch Triển khai ---")
-
-def process_turnover_documents(task_output: str, output_base_dir_param: str):
-    logging.info(f"--- Bắt đầu xử lý output cho các tài liệu Bàn giao ---")
-
-    phase_output_dir = os.path.join(output_base_dir_param, "6_deployment")
-    os.makedirs(phase_output_dir, exist_ok=True) # Đảm bảo thư mục tồn tại
-
-    # Sử dụng regex để tìm các khối nội dung được đánh dấu
-    form_content = re.search(r'```form\s*([\s\S]*?)\s*```', task_output)
-    install_content = re.search(r'```install_guide\s*([\s\S]*?)\s*```', task_output)
-    ops_content = re.search(r'```ops_guide\s*([\s\S]*?)\s*```', task_output)
-
-    # Production_Turnover_Approval_Form.docx
-    form_text = form_content.group(1).strip() if form_content else "Không tìm thấy nội dung mẫu phê duyệt."
-    form_doc_path = os.path.join(phase_output_dir, "Production_Turnover_Approval_Form.docx")
-    write_output(form_doc_path, form_text)
-    shared_memory.set("phase_6_deployment", "production_turnover_approval_form_path", form_doc_path)
-    logging.info(f"Đã lưu Production_Turnover_Approval_Form.docx và cập nhật shared_memory.")
-
-    # Installation_Guide.docx
-    install_text = install_content.group(1).strip() if install_content else "Không tìm thấy nội dung hướng dẫn cài đặt."
-    install_doc_path = os.path.join(phase_output_dir, "Installation_Guide.docx")
-    write_output(install_doc_path, install_text)
-    shared_memory.set("phase_6_deployment", "installation_guide_path", install_doc_path)
-    logging.info(f"Đã lưu Installation_Guide.docx và cập nhật shared_memory.")
-
-    # Operations_Guide.docx
-    ops_text = ops_content.group(1).strip() if ops_content else "Không tìm thấy nội dung hướng dẫn vận hành."
-    ops_doc_path = os.path.join(phase_output_dir, "Operations_Guide.docx")
-    write_output(ops_doc_path, ops_text)
-    shared_memory.set("phase_6_deployment", "operations_guide_path", ops_doc_path)
-    logging.info(f"Đã lưu Operations_Guide.docx và cập nhật shared_memory.")
-
-    logging.info(f"--- Hoàn thành xử lý output cho các tài liệu Bàn giao ---")
-
-
-def create_deployment_tasks(devops_engineer_agent, project_manager_agent, researcher_agent, output_base_dir):
+def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, deployment_agent):
     """
-    Tạo các task liên quan đến giai đoạn Triển khai, Bàn giao và Giám sát.
-    Args:
-        devops_engineer_agent: Agent chính cho Deployment.
-        project_manager_agent, researcher_agent: Các agent chung.
-        output_base_dir: Đường dẫn thư mục base.
-    Returns:
-        list: Danh sách các Task đã tạo.
+    Tạo các tác vụ cho giai đoạn Triển khai (Deployment Phase).
     """
-    # Lấy dữ liệu từ các phase trước
-    test_execution_report = shared_memory.get("phase_5_testing", "test_execution_report")
-    build_deploy_process = shared_memory.get("phase_4_development", "build_deploy_process")
-    system_architecture = shared_memory.get("phase_3_design", "system_architecture_document")
+    tasks = []
 
-    deployment_context = f"Test Execution Report (Snippet): {test_execution_report[:500] if test_execution_report else 'N/A'}\n" \
-                         f"Build/Deployment Process (Snippet): {build_deploy_process[:500] if build_deploy_process else 'N/A'}\n" \
-                         f"System Architecture (Snippet): {system_architecture[:500] if system_architecture else 'N/A'}"
-    
-    if not any([test_execution_report, build_deploy_process, system_architecture]):
-        logging.warning("Previous phase documents missing for deployment tasks.")
-        deployment_context = "Không có tài liệu liên quan nào được tìm thấy."
+    # Tác vụ tạo Process Guide
+    process_guide_task = Task(
+        description=(
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Hướng dẫn quy trình (Process Guide) dựa trên dữ liệu từ `build_deployment_plan` trong SharedMemory. "
+            "Tài liệu này cung cấp hướng dẫn thực hiện từng bước cho hệ thống hoặc quy trình. "
+            "Nội dung phải bao gồm: giới thiệu, mục đích và phạm vi, bối cảnh, đối tượng sử dụng, tài liệu tham chiếu, thông tin quy trình, các thủ tục chính, các nhiệm vụ, chức năng, thông tin bổ sung về quy trình. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `Process_Guide.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `process_guide`."
+        ),
+        agent=deployment_agent,
+        expected_output=(
+            "Tài liệu `Process_Guide.docx` chứa hướng dẫn quy trình, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `process_guide`."
+        ),
+        callback=lambda output: create_docx(
+            "Hướng dẫn quy trình",
+            [
+                "1. Giới thiệu: Mục đích và phạm vi của quy trình (lấy từ build_deployment_plan).",
+                "2. Bối cảnh: Ngữ cảnh sử dụng quy trình.",
+                "3. Đối tượng sử dụng: Người sử dụng tài liệu.",
+                "4. Tài liệu tham chiếu: Các tài liệu liên quan.",
+                "5. Thông tin quy trình: Mô tả quy trình triển khai.",
+                "6. Thủ tục chính: Các bước thực hiện quy trình.",
+                "7. Nhiệm vụ và chức năng: Các nhiệm vụ và chức năng cụ thể.",
+                "8. Thông tin bổ sung: Các chi tiết bổ sung về quy trình.",
+                shared_memory.load("build_deployment_plan") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/Process_Guide.docx"
+        ) and shared_memory.save("process_guide", output)
+    )
 
-    # Tạo thư mục con cho Phase 6 Deployment (nếu chưa có)
-    phase_output_dir = os.path.join(output_base_dir, "6_deployment")
-    os.makedirs(phase_output_dir, exist_ok=True)
-    logging.info(f"Đã đảm bảo thư mục đầu ra cho Phase 6: {phase_output_dir}")
+    # Tác vụ tạo Installation Guide
+    installation_guide_task = Task(
+        description=(
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Hướng dẫn cài đặt (Installation Guide) dựa trên dữ liệu từ `build_deployment_plan` và `system_architecture` trong SharedMemory. "
+            "Tài liệu này mô tả chiến lược cài đặt, rủi ro, và bảo mật khi cài đặt hệ thống. "
+            "Nội dung phải bao gồm: giới thiệu, mục đích, mục tiêu, các bên liên quan, người liên hệ, thông tin cài đặt, tổng quan hệ thống, phạm vi, môi trường, rủi ro, bảo mật, kế hoạch và yêu cầu tiền cài đặt, lịch trình cài đặt, hướng dẫn cài đặt, các giai đoạn chính, nhiệm vụ, sao lưu và phục hồi, quy trình thay đổi và rollback, hỗ trợ cài đặt, danh sách phần cứng, phần mềm, mạng, cơ sở vật chất. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `Installation_Guide.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `installation_guide`."
+        ),
+        agent=deployment_agent,
+        expected_output=(
+            "Tài liệu `Installation_Guide.docx` chứa hướng dẫn cài đặt, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `installation_guide`."
+        ),
+        callback=lambda output: create_docx(
+            "Hướng dẫn cài đặt",
+            [
+                "1. Giới thiệu: Mục đích và mục tiêu cài đặt (lấy từ build_deployment_plan).",
+                "2. Các bên liên quan: Người liên hệ và các bên liên quan (lấy từ system_architecture).",
+                "3. Tổng quan hệ thống: Mô tả hệ thống và môi trường cài đặt.",
+                "4. Rủi ro và bảo mật: Các rủi ro và biện pháp bảo mật.",
+                "5. Yêu cầu tiền cài đặt: Các yêu cầu trước khi cài đặt.",
+                "6. Lịch trình cài đặt: Thời gian và các bước cài đặt.",
+                "7. Hướng dẫn cài đặt: Các giai đoạn và nhiệm vụ cài đặt.",
+                "8. Sao lưu và phục hồi: Quy trình sao lưu và phục hồi.",
+                "9. Quy trình rollback: Kế hoạch khôi phục nếu cài đặt thất bại.",
+                "10. Hỗ trợ cài đặt: Danh sách phần cứng, phần mềm, mạng, cơ sở vật chất.",
+                shared_memory.load("build_deployment_plan") or "Không có dữ liệu",
+                shared_memory.load("system_architecture") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/Installation_Guide.docx"
+        ) and shared_memory.save("installation_guide", output)
+    )
 
-    # --- 1. Task: Deployment Plan ---
-    # Nhiệm vụ tạo Deployment_Plan.md và Production_Implementation_Plan.docx
+    # Tác vụ tạo Software User Guide
+    software_user_guide_task = Task(
+        description=(
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Hướng dẫn sử dụng phần mềm (Software User Guide) dựa trên dữ liệu từ `functional_requirements` và `ui_design_template` trong SharedMemory. "
+            "Tài liệu này hướng dẫn người dùng cuối cách sử dụng phần mềm với minh họa và thao tác cơ bản. "
+            "Nội dung phải bao gồm: giới thiệu, mục đích và phạm vi, bối cảnh, đối tượng, tài liệu tham chiếu, tổng quan ứng dụng, thành phần chính, chức năng, lợi ích, phân quyền người dùng, thông tin truy cập, điều hướng, hướng dẫn menu, trang chính, các hành động, thủ tục và chức năng chính. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `Software_User_Guide.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `software_user_guide`."
+        ),
+        agent=deployment_agent,
+        expected_output=(
+            "Tài liệu `Software_User_Guide.docx` chứa hướng dẫn sử dụng phần mềm, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `software_user_guide`."
+        ),
+        callback=lambda output: create_docx(
+            "Hướng dẫn sử dụng phần mềm",
+            [
+                "1. Giới thiệu: Mục đích và phạm vi hướng dẫn (lấy từ functional_requirements).",
+                "2. Bối cảnh và đối tượng: Ngữ cảnh và người dùng cuối.",
+                "3. Tài liệu tham chiếu: Các tài liệu liên quan.",
+                "4. Tổng quan ứng dụng: Thành phần, chức năng, lợi ích (lấy từ ui_design_template).",
+                "5. Phân quyền người dùng: Các mức phân quyền.",
+                "6. Thông tin truy cập: Hướng dẫn đăng nhập.",
+                "7. Điều hướng: Hướng dẫn menu và trang chính.",
+                "8. Thủ tục và chức năng: Các thao tác và chức năng chính.",
+                shared_memory.load("functional_requirements") or "Không có dữ liệu",
+                shared_memory.load("ui_design_template") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/Software_User_Guide.docx"
+        ) and shared_memory.save("software_user_guide", output)
+    )
+
+    # Tác vụ tạo System Administration Guide
+    system_admin_guide_task = Task(
+        description=(
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Hướng dẫn quản trị hệ thống (System Administration Guide) dựa trên dữ liệu từ `system_architecture` và `security_architecture` trong SharedMemory. "
+            "Tài liệu này hướng dẫn quản trị viên hệ thống thực hiện các nhiệm vụ quản trị và bảo trì. "
+            "Nội dung phải bao gồm: giới thiệu, mục đích, mục tiêu, tài liệu tham chiếu, thông tin chung hệ thống, tổng quan, tài sản dữ liệu, quy trình xử lý, môi trường (cơ sở vật chất, phần cứng, phần mềm, mạng), quản trị và bảo trì, quản trị máy chủ, tài khoản người dùng, quản trị phần mềm/hệ thống, quản trị cơ sở dữ liệu, sao lưu phục hồi. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `System_Administration_Guide.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `system_admin_guide`."
+        ),
+        agent=deployment_agent,
+        expected_output=(
+            "Tài liệu `System_Administration_Guide.docx` chứa hướng dẫn quản trị hệ thống, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `system_admin_guide`."
+        ),
+        callback=lambda output: create_docx(
+            "Hướng dẫn quản trị hệ thống",
+            [
+                "1. Giới thiệu: Mục đích và mục tiêu quản trị (lấy từ system_architecture).",
+                "2. Tài liệu tham chiếu: Các tài liệu liên quan.",
+                "3. Tổng quan hệ thống: Mô tả hệ thống và tài sản dữ liệu (lấy từ security_architecture).",
+                "4. Môi trường: Cơ sở vật chất, phần cứng, phần mềm, mạng.",
+                "5. Quản trị máy chủ: Quản lý và bảo trì máy chủ.",
+                "6. Tài khoản người dùng: Quản lý tài khoản người dùng.",
+                "7. Quản trị phần mềm/hệ thống: Quản lý phần mềm và hệ thống.",
+                "8. Quản trị cơ sở dữ liệu: Quản lý và bảo trì cơ sở dữ liệu.",
+                "9. Sao lưu phục hồi: Quy trình sao lưu và phục hồi.",
+                shared_memory.load("system_architecture") or "Không có dữ liệu",
+                shared_memory.load("security_architecture") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/System_Administration_Guide.docx"
+        ) and shared_memory.save("system_admin_guide", output)
+    )
+
+    # Tác vụ tạo Operations Guide
+    operations_guide_task = Task(
+        description=(
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Hướng dẫn vận hành (Operations Guide) dựa trên dữ liệu từ `system_architecture` và `build_deployment_plan` trong SharedMemory. "
+            "Tài liệu này mô tả các thủ tục vận hành hệ thống và thực hành vận hành tốt. "
+            "Nội dung phải bao gồm: giới thiệu, mục đích, đối tượng, thông tin hệ thống, tổng quan, người liên hệ, môi trường, tài sản, giao diện hệ thống, vận hành, quản trị và bảo trì, lịch trình vận hành, phân công trách nhiệm, quy trình vận hành chi tiết, bảo trì và xử lý sự cố, quản lý thay đổi, cấu hình, quản trị hệ thống, phần mềm, máy chủ, cơ sở dữ liệu. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `Operations_Guide.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `operations_guide`."
+        ),
+        agent=deployment_agent,
+        expected_output=(
+            "Tài liệu `Operations_Guide.docx` chứa hướng dẫn vận hành, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `operations_guide`."
+        ),
+        callback=lambda output: create_docx(
+            "Hướng dẫn vận hành",
+            [
+                "1. Giới thiệu: Mục đích và đối tượng hướng dẫn (lấy từ system_architecture).",
+                "2. Thông tin hệ thống: Tổng quan, người liên hệ, môi trường (lấy từ build_deployment_plan).",
+                "3. Giao diện hệ thống: Mô tả giao diện vận hành.",
+                "4. Lịch trình vận hành: Thời gian và phân công trách nhiệm.",
+                "5. Quy trình vận hành: Các bước vận hành chi tiết.",
+                "6. Bảo trì và xử lý sự cố: Quy trình bảo trì và xử lý lỗi.",
+                "7. Quản lý thay đổi: Quy trình quản lý thay đổi và cấu hình.",
+                "8. Quản trị hệ thống: Quản lý hệ thống, phần mềm, máy chủ, cơ sở dữ liệu.",
+                shared_memory.load("system_architecture") or "Không có dữ liệu",
+                shared_memory.load("build_deployment_plan") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/Operations_Guide.docx"
+        ) and shared_memory.save("operations_guide", output)
+    )
+
+    # Tác vụ tạo Production Implementation Plan
+    production_implementation_plan_task = Task(
+        description=(
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Kế hoạch triển khai sản phẩm (Production Implementation Plan) dựa trên dữ liệu từ `build_deployment_plan` và `test_summary_report` trong SharedMemory. "
+            "Tài liệu này hướng dẫn từng bước đưa ứng dụng vào môi trường sản xuất. "
+            "Nội dung phải bao gồm: mô tả triển khai sản phẩm, mục tiêu, thiết bị bị ảnh hưởng, các bước bàn giao sản phẩm, thông tin hỗ trợ kỹ thuật, tác động tiềm tàng, thành phần phần mềm, phần cứng và bước triển khai tương ứng, kiểm thử và chấp nhận, kế hoạch rollback và dự phòng, đào tạo người dùng và tài liệu, liên hệ khẩn cấp khác. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `Production_Implementation_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `production_implementation_plan`."
+        ),
+        agent=deployment_agent,
+        expected_output=(
+            "Tài liệu `Production_Implementation_Plan.docx` chứa kế hoạch triển khai sản phẩm, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `production_implementation_plan`."
+        ),
+        callback=lambda output: create_docx(
+            "Kế hoạch triển khai sản phẩm",
+            [
+                "1. Mô tả triển khai: Mô tả quy trình triển khai (lấy từ build_deployment_plan).",
+                "2. Mục tiêu: Mục tiêu triển khai sản phẩm.",
+                "3. Thiết bị bị ảnh hưởng: Các thiết bị liên quan (lấy từ test_summary_report).",
+                "4. Bước bàn giao: Các bước bàn giao sản phẩm.",
+                "5. Hỗ trợ kỹ thuật: Thông tin hỗ trợ kỹ thuật.",
+                "6. Tác động tiềm tàng: Các tác động có thể xảy ra.",
+                "7. Thành phần triển khai: Phần mềm, phần cứng và các bước triển khai.",
+                "8. Kiểm thử và chấp nhận: Quy trình kiểm thử sau triển khai.",
+                "9. Kế hoạch rollback: Kế hoạch dự phòng và rollback.",
+                "10. Đào tạo và tài liệu: Đào tạo người dùng và tài liệu hỗ trợ.",
+                "11. Liên hệ khẩn cấp: Danh sách liên hệ khẩn cấp.",
+                shared_memory.load("build_deployment_plan") or "Không có dữ liệu",
+                shared_memory.load("test_summary_report") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/Production_Implementation_Plan.docx"
+        ) and shared_memory.save("production_implementation_plan", output)
+    )
+
+    # Tác vụ tạo Production Turnover Approval
+    production_turnover_approval_task = Task(
+        description=(
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Phê duyệt bàn giao sản xuất (Production Turnover Approval) dựa trên dữ liệu từ `project_acceptance` và `test_summary_report` trong SharedMemory. "
+            "Tài liệu này đảm bảo các thay đổi được kiểm thử, phê duyệt và chuyển giao an toàn. "
+            "Nội dung phải bao gồm: giới thiệu, mục đích, tổng quan hệ thống/dự án, phạm vi, yêu cầu phê duyệt bàn giao, phê duyệt và ký xác nhận. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `Production_Turnover_Approval.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `production_turnover_approval`."
+        ),
+        agent=deployment_agent,
+        expected_output=(
+            "Tài liệu `Production_Turnover_Approval.docx` chứa phê duyệt bàn giao sản xuất, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `production_turnover_approval`."
+        ),
+        callback=lambda output: create_docx(
+            "Phê duyệt bàn giao sản xuất",
+            [
+                "1. Giới thiệu: Mục đích của phê duyệt bàn giao (lấy từ project_acceptance).",
+                "2. Tổng quan hệ thống: Mô tả hệ thống/dự án (lấy từ test_summary_report).",
+                "3. Phạm vi: Phạm vi bàn giao sản xuất.",
+                "4. Yêu cầu phê duyệt: Các yêu cầu để phê duyệt bàn giao.",
+                "5. Phê duyệt và ký xác nhận: Chữ ký của các bên liên quan.",
+                shared_memory.load("project_acceptance") or "Không có dữ liệu",
+                shared_memory.load("test_summary_report") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/Production_Turnover_Approval.docx"
+        ) and shared_memory.save("production_turnover_approval", output)
+    )
+
+    # Tác vụ tạo Deployment Plan
     deployment_plan_task = Task(
         description=(
-            f"Dựa trên các tài liệu thiết kế (kiến trúc hệ thống), kết quả kiểm thử và quy trình build/deploy, "
-            f"tạo Kế hoạch Triển khai chi tiết. Output phải bao gồm:\n"
-            f"1. Nội dung văn bản của kế hoạch triển khai (ví dụ: các bước, yêu cầu môi trường, rollback plan).\n"
-            f"2. Mã nguồn Graphviz DOT cho một Deployment Diagram minh họa cấu trúc vật lý của hệ thống "
-            f"và nơi các thành phần phần mềm sẽ được triển khai. "
-            f"Cấu trúc đầu ra của bạn phải là phần văn bản kế hoạch, sau đó là mã DOT (trong '```dot\\n...\\n```').\n"
-            f"--- Context: {deployment_context}"
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Kế hoạch triển khai (Deployment Plan) dựa trên dữ liệu từ `build_deployment_plan` và `production_implementation_plan` trong SharedMemory. "
+            "Tài liệu này chi tiết hóa các bước triển khai hệ thống vào môi trường sản xuất. "
+            "Nội dung phải bao gồm: mục đích, phạm vi, chiến lược triển khai, lịch trình triển khai, các bước triển khai, môi trường triển khai, kiểm thử sau triển khai, kế hoạch rollback, hỗ trợ sau triển khai. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `Deployment_Plan.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `deployment_plan`."
         ),
+        agent=deployment_agent,
         expected_output=(
-            "Một chuỗi văn bản (string) bao gồm:\n"
-            "1. Phần mô tả Kế hoạch Triển khai (để lưu vào Deployment_Plan.md).\n"
-            "2. Tiếp theo là mã Graphviz DOT cho Deployment Diagram được bọc trong '```dot\\n...\\n```' (để chèn vào Production_Implementation_Plan.docx).\n"
-            "Đảm bảo mã DOT đúng cú pháp để có thể render thành hình ảnh."
+            "Tài liệu `Deployment_Plan.docx` chứa kế hoạch triển khai, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `deployment_plan`."
         ),
-        agent=devops_engineer_agent,
-        callback=lambda output: process_and_create_deployment_doc(str(output), output_base_dir)
+        callback=lambda output: create_docx(
+            "Kế hoạch triển khai",
+            [
+                "1. Mục đích: Mục tiêu của kế hoạch triển khai (lấy từ build_deployment_plan).",
+                "2. Phạm vi: Phạm vi triển khai hệ thống (lấy từ production_implementation_plan).",
+                "3. Chiến lược triển khai: Phương pháp triển khai (blue-green, canary,...).",
+                "4. Lịch trình triển khai: Thời gian và các mốc triển khai.",
+                "5. Các bước triển khai: Các bước chi tiết để triển khai.",
+                "6. Môi trường triển khai: Môi trường sản xuất và staging.",
+                "7. Kiểm thử sau triển khai: Quy trình kiểm thử sau triển khai.",
+                "8. Kế hoạch rollback: Kế hoạch khôi phục nếu triển khai thất bại.",
+                "9. Hỗ trợ sau triển khai: Hỗ trợ kỹ thuật sau triển khai.",
+                shared_memory.load("build_deployment_plan") or "Không có dữ liệu",
+                shared_memory.load("production_implementation_plan") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/Deployment_Plan.docx"
+        ) and shared_memory.save("deployment_plan", output)
     )
 
-    # --- 2. Task: Handover Documents (bao gồm Approval Form, Installation Guide, Operations Guide) ---
-    handover_documents_task = Task( 
+    # Tác vụ tạo Monitoring and Alerting Setup Guide
+    monitoring_alerting_guide_task = Task(
         description=(
-            f"Tạo ba tài liệu sau đây trong một phản hồi duy nhất, sử dụng các khối mã riêng biệt:\n"
-            f"1. **Production Turnover Approval Form.docx**: Mẫu phê duyệt bàn giao sản xuất, xác nhận việc bàn giao thành công. "
-            f"Bao gồm thông tin dự án, danh sách các tài liệu bàn giao, các hạng mục kiểm tra, và mục chữ ký.\n"
-            f"2. **Installation_Guide.docx**: Hướng dẫn cài đặt chi tiết từng bước cho hệ thống trên môi trường sản xuất, "
-            f"bao gồm yêu cầu, phụ thuộc và các lệnh cần thiết.\n"
-            f"3. **Operations_Guide.docx**: Hướng dẫn vận hành hàng ngày cho hệ thống, bao gồm quy trình vận hành, "
-            f"khắc phục sự cố phổ biến, sao lưu/phục hồi và quản lý hiệu suất.\n"
-            f"Cấu trúc đầu ra của bạn phải như sau:\n"
-            f"```form\n[Nội dung Mẫu Phê duyệt Bàn giao]\n```\n"
-            f"```install_guide\n[Nội dung Hướng dẫn Cài đặt]\n```\n"
-            f"```ops_guide\n[Nội dung Hướng dẫn Vận hành]\n```\n"
-            f"--- Production Implementation Plan: {shared_memory.get('phase_6_deployment', 'production_implementation_plan_docx_path')}"
+            "Sử dụng công cụ `create_deployment_plan_document` để tạo tài liệu Hướng dẫn thiết lập giám sát và cảnh báo (Monitoring and Alerting Setup Guide) dựa trên dữ liệu từ `system_admin_guide` và `non_functional_requirements` trong SharedMemory. "
+            "Tài liệu này hướng dẫn thiết lập hệ thống giám sát và cảnh báo để đảm bảo hệ thống hoạt động ổn định. "
+            "Nội dung phải bao gồm: mục đích, công cụ giám sát, cấu hình giám sát, các chỉ số cần theo dõi, thiết lập cảnh báo, quy trình xử lý sự cố, báo cáo giám sát. "
+            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/6_deployment` với tên `Monitoring_and_Alerting_Setup_Guide.docx`. "
+            "Lưu kết quả vào SharedMemory với khóa `monitoring_alerting_guide`."
         ),
+        agent=deployment_agent,
         expected_output=(
-            "Một chuỗi văn bản (string) chứa nội dung cho ba tài liệu:\n"
-            "1. Nội dung cho 'Production_Turnover_Approval_Form.docx' trong khối '```form...```'.\n"
-            "2. Nội dung cho 'Installation_Guide.docx' trong khối '```install_guide...```'.\n"
-            "3. Nội dung cho 'Operations_Guide.docx' trong khối '```ops_guide...```'.\n"
-            "Đảm bảo mỗi khối mã chứa nội dung đầy đủ và phù hợp cho từng tài liệu."
+            "Tài liệu `Monitoring_and_Alerting_Setup_Guide.docx` chứa hướng dẫn thiết lập giám sát và cảnh báo, "
+            "được lưu trong `output/6_deployment` và SharedMemory với khóa `monitoring_alerting_guide`."
         ),
-        agent=devops_engineer_agent,
-        context=[deployment_plan_task], 
-        callback=lambda output: process_turnover_documents(str(output), output_base_dir)
+        callback=lambda output: create_docx(
+            "Hướng dẫn thiết lập giám sát và cảnh báo",
+            [
+                "1. Mục đích: Mục tiêu của giám sát và cảnh báo (lấy từ system_admin_guide).",
+                "2. Công cụ giám sát: Các công cụ được sử dụng (Prometheus, Grafana,...).",
+                "3. Cấu hình giám sát: Hướng dẫn cấu hình hệ thống giám sát.",
+                "4. Chỉ số theo dõi: Các chỉ số hiệu suất và trạng thái (lấy từ non_functional_requirements).",
+                "5. Thiết lập cảnh báo: Quy tắc và ngưỡng cảnh báo.",
+                "6. Quy trình xử lý sự cố: Quy trình xử lý khi nhận cảnh báo.",
+                "7. Báo cáo giám sát: Báo cáo định kỳ về trạng thái hệ thống.",
+                shared_memory.load("system_admin_guide") or "Không có dữ liệu",
+                shared_memory.load("non_functional_requirements") or "Không có dữ liệu"
+            ],
+            f"{output_base_dir}/6_deployment/Monitoring_and_Alerting_Setup_Guide.docx"
+        ) and shared_memory.save("monitoring_alerting_guide", output)
     )
 
-    # --- 3. Task: Monitoring Setup Guide ---
-    monitoring_setup_guide_task = Task(
-        description=(
-            f"Phát triển Hướng dẫn Thiết lập Giám sát và Cảnh báo (Monitoring and Alerting Setup Guide) cho hệ thống đã triển khai. "
-            f"Xác định các chỉ số quan trọng (KPIs), công cụ giám sát, ngưỡng cảnh báo, và quy trình xử lý cảnh báo. "
-            f"Tài liệu này nên tập trung vào các bước cấu hình cụ thể để thiết lập hệ thống giám sát.\n"
-            f"--- Production Implementation Plan: {shared_memory.get('phase_6_deployment', 'production_implementation_plan_docx_path')}"
-        ),
-        expected_output="Tài liệu tiếng Việt 'Monitoring_and_Alerting_Setup_Guide.md' mô tả các bước thiết lập giám sát.",
-        agent=devops_engineer_agent,
-        context=[deployment_plan_task], 
-        callback=lambda output: (
-            logging.info(f"--- Hoàn thành Monitoring and Alerting Setup Guide Task ---"),
-            write_output(os.path.join(phase_output_dir, "Monitoring_and_Alerting_Setup_Guide.md"), str(output)),
-            shared_memory.set("phase_6_deployment", "monitoring_and_alerting_setup_guide_path", str(output)),
-            logging.info(f"Đã lưu Monitoring_and_Alerting_Setup_Guide.md và cập nhật shared_memory.")
-        )
-    )
-
-    # --- 4. Task: Deployment Quality Gate (Project Manager) ---
-    deployment_validation_task = Task(
-        description=(
-            f"Đánh giá kỹ lưỡng các tài liệu triển khai, bàn giao và giám sát "
-            f"(Deployment Plan, Production Implementation Plan, Production Turnover Approval Form, Installation Guide, Operations Guide, Monitoring and Alerting Setup Guide). "
-            f"Kiểm tra tính hoàn chỉnh, khả thi, và rủi ro. "
-            f"Tạo báo cáo 'Validation_Report_Phase_6.md' tóm tắt kết quả đánh giá, "
-            f"liệt kê các điểm cần cải thiện nếu có và xác nhận hoàn thành giai đoạn."
-        ),
-        expected_output="Tài liệu tiếng Việt 'Validation_Report_Phase_6.md' tóm tắt kết quả đánh giá giai đoạn triển khai.",
-        agent=project_manager_agent,
-        context=[
-            deployment_plan_task, 
-            handover_documents_task, # Task này giờ bao gồm cả Installation và Operations Guide
-            monitoring_setup_guide_task
-        ],
-        callback=lambda output: (
-            logging.info(f"--- Hoàn thành Deployment Validation Task ---"),
-            write_output(os.path.join(phase_output_dir, "Validation_Report_Phase_6.md"), str(output)),
-            shared_memory.set("phase_6_deployment", "validation_report_path", str(output)),
-            logging.info(f"Đã lưu Validation_Report_Phase_6.md và cập nhật shared_memory.")
-        )
-    )
-
-    # --- 5. Task: Research Deployment Best Practices (Researcher) ---
-    research_deployment_best_practices = Task(
-        description=(
-            f"Nghiên cứu các phương pháp hay nhất (best practices) trong triển khai và vận hành phần mềm "
-            f"(ví dụ: CI/CD, Infrastructure as Code, Blue/Green Deployment, Canary Releases). "
-            f"Tổng hợp kiến thức hỗ trợ các agent khác.\n"
-            f"--- Production Implementation Plan: {shared_memory.get('phase_6_deployment', 'production_implementation_plan_docx_path')}"
-        ),
-        expected_output="Tài liệu tiếng Việt 'Deployment_Research_Summary.md' tổng hợp các kiến thức nghiên cứu hữu ích.",
-        agent=researcher_agent,
-        context=[deployment_plan_task], 
-        callback=lambda output: (
-            logging.info(f"--- Hoàn thành Research Deployment Best Practices Task ---"),
-            write_output(os.path.join(phase_output_dir, "Deployment_Research_Summary.md"), str(output)),
-            shared_memory.set("phase_6_deployment", "research_summary_path", str(output)),
-            logging.info(f"Đã lưu Deployment_Research_Summary.md và cập nhật shared_memory.")
-        )
-    )
-
-    return [
+    tasks.extend([
+        process_guide_task,
+        installation_guide_task,
+        software_user_guide_task,
+        system_admin_guide_task,
+        operations_guide_task,
+        production_implementation_plan_task,
+        production_turnover_approval_task,
         deployment_plan_task,
-        handover_documents_task,
-        monitoring_setup_guide_task,
-        deployment_validation_task,
-        research_deployment_best_practices
-    ]
+        monitoring_alerting_guide_task
+    ])
+
+    return tasks
