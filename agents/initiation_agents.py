@@ -1,13 +1,11 @@
 from crewai import Agent
 import logging
-import os
-from utils.output_formats import create_docx, create_xlsx
 
-def create_initiation_agent(output_base_dir):
+def create_initiation_agent():
     """
     Tạo agent chuyên xử lý các tác vụ khởi tạo dự án.
     """
-    model_string = "gemini/gemini-1.5-flash-latest"  # Hoặc "gemini/gemini-pro"
+    model_string = "gemini/gemini-1.5-flash-latest"
     logging.info(f"Đang cấu hình Initiation Agent với LLM: {model_string}")
 
     initiation_agent = Agent(
@@ -26,29 +24,8 @@ def create_initiation_agent(output_base_dir):
             'Nhiệm vụ của bạn là tạo ra các tài liệu nền tảng, cung cấp một lộ trình rõ ràng cho dự án và đảm bảo sự thống nhất giữa các bên liên quan.'
         ),
         llm=model_string,
-        allow_delegation=False,  # Agent này không ủy quyền để đảm bảo chất lượng tài liệu
-        verbose=True  # Giúp theo dõi quá trình suy nghĩ của agent
+        allow_delegation=False,
+        verbose=True
     )
-
-    def create_project_document(title, content):
-        output_path = os.path.join(output_base_dir, "0_initiation", f"{title.replace(' ', '_')}.docx")
-        return create_docx(title, content, output_path)
-
-    def create_analysis_table(data):
-        output_path = os.path.join(output_base_dir, "0_initiation", "Analysis_Table.xlsx")
-        return create_xlsx(data, output_path)
-
-    initiation_agent.tools = [
-        {
-            "name": "create_project_document",
-            "description": "Tạo các tài liệu dự án dựa trên dữ liệu đầu vào",
-            "function": lambda title, content: create_project_document(title, content)
-        },
-        {
-            "name": "create_analysis_table",
-            "description": "Tạo bảng phân tích định lượng trong file Excel",
-            "function": lambda data: create_analysis_table(data)
-        }
-    ]
 
     return initiation_agent

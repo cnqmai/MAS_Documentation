@@ -9,23 +9,6 @@ def create_initiation_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     """
     tasks = []
 
-    # Tác vụ tạo tài liệu phương pháp tốt nhất
-    best_practices_task = Task(
-        description=(
-            "Sử dụng công cụ `generate_best_practices` để tạo tài liệu phương pháp tốt nhất cho giai đoạn khởi tạo dự án. "
-            "Tài liệu này cần đề xuất các thực tiễn hàng đầu, bao gồm chiến lược quản lý rủi ro, phương pháp thu thập yêu cầu, và cách tiếp cận lập kế hoạch sơ bộ. "
-            "Đảm bảo rằng các khuyến nghị dựa trên các tiêu chuẩn quản lý dự án quốc tế như PMI hoặc PRINCE2. "
-            "Lưu tài liệu dưới dạng `.docx` trong thư mục `output/0_initiation` với tên `Best_Practices_Khởi_tạo.docx`. "
-            "Lưu kết quả vào SharedMemory với khóa `best_practices`."
-        ),
-        agent=researcher_agent,
-        expected_output=(
-            "Tài liệu `Best_Practices_Khởi_tạo.docx` chứa danh sách các phương pháp tốt nhất, "
-            "được lưu trong `output/0_initiation` và SharedMemory với khóa `best_practices`."
-        ),
-        callback=lambda output: shared_memory.save("best_practices", output)
-    )
-
     # Tác vụ tạo Project Initiation Agenda
     project_initiation_agenda_task = Task(
         description=(
@@ -386,57 +369,7 @@ def create_initiation_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         ) and shared_memory.save("initiate_project_checklist", output)
     )
 
-    # Tác vụ xác thực tài liệu
-    validate_documents_task = Task(
-        description=(
-            "Sử dụng công cụ `validate_documents` để kiểm tra và xác thực tất cả các tài liệu khởi tạo (Best Practices, Project Initiation Agenda, Project Charter, Business Case, Feasibility Study, "
-            "Value Proposition Template, Project or Issue Submission Form, Project Cost - Benefit Analysis, Project Team Definition, Stakeholder Identification List, Project Resource Plan, Concept Of Operations, Initiate Project Checklist). "
-            "Đánh giá tính đầy đủ, chính xác, và phù hợp với các tiêu chuẩn quản lý dự án như PMI hoặc PRINCE2. "
-            "Tạo báo cáo xác thực chi tiết, nêu rõ trạng thái của từng tài liệu (đạt, cần chỉnh sửa, không đạt) và đưa ra các khuyến nghị cải thiện nếu cần. "
-            "Lưu báo cáo dưới dạng `.docx` và `.xlsx` trong thư mục `output/0_initiation` với tên `Validation_Report.docx` và `Validation_Report.xlsx`. "
-            "Lưu kết quả vào SharedMemory với khóa `validation_report`."
-        ),
-        agent=project_manager_agent,
-        expected_output=(
-            "Báo cáo xác thực `Validation_Report.docx` và `Validation_Report.xlsx` chứa trạng thái và khuyến nghị cho các tài liệu, "
-            "được lưu trong `output/0_initiation` và SharedMemory với khóa `validation_report`."
-        ),
-        callback=lambda output: (
-            create_docx(
-                "Báo cáo xác thực tài liệu",
-                [
-                    "1. Tóm tắt: Tổng quan về trạng thái xác thực của các tài liệu.",
-                    "2. Trạng thái từng tài liệu: Best Practices, Project Initiation Agenda, Project Charter, Business Case, Feasibility Study, Value Proposition Template, Project or Issue Submission Form, Project Cost - Benefit Analysis, Project Team Definition, Stakeholder Identification List, Project Resource Plan, Concept Of Operations, Initiate Project Checklist.",
-                    "3. Khuyến nghị: Các cải tiến cần thiết cho từng tài liệu (nếu có).",
-                    "4. Kết luận: Đánh giá tổng thể về chất lượng tài liệu."
-                ],
-                f"{output_base_dir}/0_initiation/Validation_Report.docx"
-            ) and
-            create_xlsx(
-                [
-                    ["Document", "Status", "Recommendations"],
-                    ["Best Practices", "TBD", "TBD"],
-                    ["Project Initiation Agenda", "TBD", "TBD"],
-                    ["Project Charter", "TBD", "TBD"],
-                    ["Business Case", "TBD", "TBD"],
-                    ["Feasibility Study", "TBD", "TBD"],
-                    ["Value Proposition Template", "TBD", "TBD"],
-                    ["Project or Issue Submission Form", "TBD", "TBD"],
-                    ["Project Cost - Benefit Analysis", "TBD", "TBD"],
-                    ["Project Team Definition", "TBD", "TBD"],
-                    ["Stakeholder Identification List", "TBD", "TBD"],
-                    ["Project Resource Plan", "TBD", "TBD"],
-                    ["Concept Of Operations", "TBD", "TBD"],
-                    ["Initiate Project Checklist", "TBD", "TBD"]
-                ],
-                f"{output_base_dir}/0_initiation/Validation_Report.xlsx"
-            ) and
-            shared_memory.save("validation_report", output)
-        )
-    )
-
     tasks.extend([
-        best_practices_task,
         project_initiation_agenda_task,
         project_charter_task,
         business_case_task,
@@ -449,7 +382,6 @@ def create_initiation_tasks(shared_memory: SharedMemory, output_base_dir: str, i
         project_resource_plan_task,
         concept_of_operations_task,
         initiate_project_checklist_task,
-        validate_documents_task
     ])
 
     return tasks

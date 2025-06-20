@@ -52,3 +52,6 @@ class SharedMemory:
             keys = list(self._data.keys())
             logging.info("Đã lấy danh sách các khóa")
             return keys
+        
+    set = save
+    get = load

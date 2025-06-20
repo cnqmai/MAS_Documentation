@@ -8,7 +8,7 @@ def create_docx(title, content, output_path):
     doc = Document()
     doc.add_heading(title, 0)
     for paragraph in content:
-        doc.add_paragraph(paragraph)
+        doc.add_paragraph(str(paragraph))  # ✅ ép kiểu rõ ràng về string
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     doc.save(output_path)
     return output_path
