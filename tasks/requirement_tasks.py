@@ -1,7 +1,8 @@
 import os
 from crewai import Task
 from memory.shared_memory import SharedMemory
-from utils.output_formats import create_docx, create_xlsx
+from utils.output_formats import create_docx, create_xlsx, create_image
+from graphviz import Digraph
 import json
 
 # --- Các hàm Callback đã điều chỉnh ---
@@ -569,14 +570,16 @@ def create_requirements_tasks(shared_memory: SharedMemory, output_base_dir: str,
             f"project_charter:\n{global_context['project_charter']}\n\n"
             f"business_case:\n{global_context['business_case']}\n\n"
             f"Tạo một sơ đồ use case (Use Case Diagram) cho Business Requirements Document (BRD) để minh họa các actor và use case chính của hệ thống. "
-            f"Sơ đồ phải bao gồm ít nhất 3 actor (e.g., Người dùng, Quản trị viên, Hệ thống bên ngoài) và 5 use case (e.g., Đăng nhập, Quản lý dữ liệu, Xuất báo cáo). "
-            f"Kết quả là một biểu đồ dạng bubble chart, với các actor và use case được biểu diễn bằng các node, và các liên kết thể hiện mối quan hệ. "
-            f"Lưu biểu đồ vào SharedMemory với khóa 'chart_brd_use_case'."
+            f"Sơ đồ phải bao gồm ít nhất 3 actor (e.g., Người dùng, Quản trị viên, Hệ thống bên ngoài) và 5 use case (e.g., Đăng nhập, Quản lý dữ liệu, Xuất báo cáo), với các liên kết thể hiện mối quan hệ. "
+            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'Use_Case_Diagram_BRD.dot' trong thư mục '{output_base_dir}/3_requirements'. "
+            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
+            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_brd_use_case' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_brd_use_case'."
         ),
         agent=researcher_agent,
         expected_output=(
-            f"Một bubble chart hoàn chỉnh minh họa sơ đồ use case cho BRD, lưu trong SharedMemory với khóa 'chart_brd_use_case'. "
-            f"Biểu đồ rõ ràng, có ít nhất 3 actor và 5 use case, với các liên kết được thể hiện."
+            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ use case cho BRD, lưu trong '{output_base_dir}/3_requirements/Use_Case_Diagram_BRD.dot' và SharedMemory với khóa 'graphviz_brd_use_case'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/3_requirements/Use_Case_Diagram_BRD.png' và SharedMemory với khóa 'image_brd_use_case'. "
+            f"Sơ đồ rõ ràng, có ít nhất 3 actor và 5 use case, với các liên kết được thể hiện."
         ),
         context=[
             {
@@ -590,7 +593,48 @@ def create_requirements_tasks(shared_memory: SharedMemory, output_base_dir: str,
                 "input": global_context["business_case"]
             }
         ],
-        callback=lambda output: shared_memory.save("chart_brd_use_case", output)
+        callback=lambda output: (
+            shared_memory.save("graphviz_brd_use_case", output) and
+            (open(os.path.join(output_base_dir, "3_requirements", "Use_Case_Diagram_BRD.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            shared_memory.save("image_brd_use_case", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "3_requirements", "Use_Case_Diagram_BRD")))
+        )
+    ))
+
+    # New Task: Traceability Matrix for RTM (Graphviz)
+    tasks.append(Task(
+        description=(
+            f"Dựa trên dữ liệu functional_requirements và non_functional_requirements:\n\n"
+            f"functional_requirements:\n{global_context['functional_requirements']}\n\n"
+            f"non_functional_requirements:\n{global_context['non_functional_requirements']}\n\n"
+            f"Tạo một ma trận truy xuất yêu cầu (Requirements Traceability Matrix) cho Requirements Traceability Matrix (RTM) để minh họa mối quan hệ giữa yêu cầu và test case. "
+            f"Ma trận phải bao gồm ít nhất 5 yêu cầu (e.g., REQ-001, REQ-002) và 5 test case (e.g., TC-001, TC-002), với các liên kết thể hiện yêu cầu nào được kiểm tra bởi test case nào. "
+            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'Traceability_Matrix_RTM.dot' trong thư mục '{output_base_dir}/3_requirements'. "
+            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
+            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_rtm_traceability' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_rtm_traceability'."
+        ),
+        agent=researcher_agent,
+        expected_output=(
+            f"Mã Graphviz DOT hoàn chỉnh minh họa ma trận truy xuất yêu cầu cho RTM, lưu trong '{output_base_dir}/3_requirements/Traceability_Matrix_RTM.dot' và SharedMemory với khóa 'graphviz_rtm_traceability'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/3_requirements/Traceability_Matrix_RTM.png' và SharedMemory với khóa 'image_rtm_traceability'. "
+            f"Sơ đồ rõ ràng, có ít nhất 5 yêu cầu và 5 test case, với các liên kết được thể hiện."
+        ),
+        context=[
+            {
+                "description": "Thông tin từ functional_requirements",
+                "expected_output": "Tóm tắt các yêu cầu chức năng để xác định yêu cầu.",
+                "input": global_context["functional_requirements"]
+            },
+            {
+                "description": "Thông tin từ non_functional_requirements",
+                "expected_output": "Tóm tắt các yêu cầu phi chức năng để bổ sung yêu cầu.",
+                "input": global_context["non_functional_requirements"]
+            }
+        ],
+        callback=lambda output: (
+            shared_memory.save("graphviz_rtm_traceability", output) and
+            (open(os.path.join(output_base_dir, "3_requirements", "Traceability_Matrix_RTM.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            shared_memory.save("image_rtm_traceability", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "3_requirements", "Traceability_Matrix_RTM")))
+        )
     ))
 
     return tasks

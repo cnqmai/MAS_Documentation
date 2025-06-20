@@ -1,7 +1,8 @@
 import os
 from crewai import Task
 from memory.shared_memory import SharedMemory
-from utils.output_formats import create_docx
+from utils.output_formats import create_docx, create_xlsx, create_image
+from graphviz import Digraph
 import json
 
 # --- Hàm Callback đã điều chỉnh ---
@@ -619,6 +620,69 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
             f"{output_base_dir}/3_design/API_Design_Document.docx",
             shared_memory,
             "api_design"
+        )
+    ))
+
+
+    # New Task: System Architecture Diagram for System Architecture (Graphviz)
+    tasks.append(Task(
+        description=(
+            f"Dựa trên dữ liệu system_requirements:\n\n"
+            f"system_requirements:\n{global_context['system_requirements']}\n\n"
+            f"Tạo một sơ đồ kiến trúc hệ thống (System Architecture Diagram) cho System Architecture để minh họa các thành phần chính của hệ thống (e.g., Frontend, Backend, Database, API Gateway). "
+            f"Sơ đồ phải bao gồm ít nhất 4 thành phần và các liên kết thể hiện luồng tương tác giữa chúng. "
+            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'System_Architecture_Diagram.dot' trong thư mục '{output_base_dir}/4_design'. "
+            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
+            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_system_architecture' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_system_architecture'."
+        ),
+        agent=design_agent,
+        expected_output=(
+            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ kiến trúc hệ thống, lưu trong '{output_base_dir}/4_design/System_Architecture_Diagram.dot' và SharedMemory với khóa 'graphviz_system_architecture'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/4_design/System_Architecture_Diagram.png' và SharedMemory với khóa 'image_system_architecture'. "
+            f"Sơ đồ rõ ràng, có ít nhất 4 thành phần và các liên kết tương tác."
+        ),
+        context=[
+            {
+                "description": "Thông tin từ system_requirements",
+                "expected_output": "Tóm tắt yêu cầu hệ thống để xác định các thành phần kiến trúc.",
+                "input": global_context["system_requirements"]
+            }
+        ],
+        callback=lambda output: (
+            shared_memory.save("graphviz_system_architecture", output) and
+            (open(os.path.join(output_base_dir, "4_design", "System_Architecture_Diagram.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            shared_memory.save("image_system_architecture", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "4_design", "System_Architecture_Diagram")))
+        )
+    ))
+
+    # New Task: Wireframe for User Interface Design Template (Graphviz)
+    tasks.append(Task(
+        description=(
+            f"Dựa trên dữ liệu functional_requirements:\n\n"
+            f"functional_requirements:\n{global_context['functional_requirements']}\n\n"
+            f"Tạo một wireframe mẫu cho User Interface Design Template để minh họa bố cục giao diện người dùng (e.g., Header, Sidebar, Content Area, Footer). "
+            f"Wireframe phải bao gồm ít nhất 4 thành phần giao diện và các liên kết thể hiện cách điều hướng. "
+            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'UI_Wireframe.dot' trong thư mục '{output_base_dir}/4_design'. "
+            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
+            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_ui_wireframe' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_ui_wireframe'."
+        ),
+        agent=design_agent,
+        expected_output=(
+            f"Mã Graphviz DOT hoàn chỉnh minh họa wireframe giao diện người dùng, lưu trong '{output_base_dir}/4_design/UI_Wireframe.dot' và SharedMemory với khóa 'graphviz_ui_wireframe'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/4_design/UI_Wireframe.png' và SharedMemory với khóa 'image_ui_wireframe'. "
+            f"Sơ đồ rõ ràng, có ít nhất 4 thành phần giao diện và luồng điều hướng."
+        ),
+        context=[
+            {
+                "description": "Thông tin từ functional_requirements",
+                "expected_output": "Tóm tắt yêu cầu chức năng để xác định bố cục giao diện.",
+                "input": global_context["functional_requirements"]
+            }
+        ],
+        callback=lambda output: (
+            shared_memory.save("graphviz_ui_wireframe", output) and
+            (open(os.path.join(output_base_dir, "4_design", "UI_Wireframe.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            shared_memory.save("image_ui_wireframe", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "4_design", "UI_Wireframe")))
         )
     ))
 

@@ -1,7 +1,8 @@
 import os
 from crewai import Task
 from memory.shared_memory import SharedMemory
-from utils.output_formats import create_docx, create_xlsx
+from utils.output_formats import create_docx, create_xlsx, create_image
+from graphviz import Digraph
 import json
 
 # --- Hàm Callback cho DOCX ---
@@ -599,6 +600,38 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
             f"{output_base_dir}/5_testing/Project_Status_Report.docx",
             shared_memory,
             "project_status_report"
+        )
+    ))
+
+
+    # New Task: Testing Flow for Test Plan (Graphviz)
+    tasks.append(Task(
+        description=(
+            f"Dựa trên dữ liệu test_plan:\n\n"
+            f"test_plan:\n{global_context['test_plan']}\n\n"
+            f"Tạo một sơ đồ luồng kiểm thử (Testing Flow) cho Test Plan để minh họa các bước trong quy trình kiểm thử (e.g., Lập kế hoạch, Thiết kế test case, Thực thi, Báo cáo). "
+            f"Sơ đồ phải bao gồm ít nhất 4 bước, với các liên kết thể hiện thứ tự thực hiện. "
+            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'Testing_Flow.dot' trong thư mục '{output_base_dir}/5_testing'. "
+            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
+            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_testing_flow' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_testing_flow'."
+        ),
+        agent=testing_agent,
+        expected_output=(
+            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ luồng kiểm thử, lưu trong '{output_base_dir}/5_testing/Testing_Flow.dot' và SharedMemory với khóa 'graphviz_testing_flow'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/5_testing/Testing_Flow.png' và SharedMemory với khóa 'image_testing_flow'. "
+            f"Sơ đồ rõ ràng, có ít nhất 4 bước và các liên kết thứ tự."
+        ),
+        context=[
+            {
+                "description": "Thông tin từ test_plan",
+                "expected_output": "Tóm tắt kế hoạch kiểm thử để xác định các bước.",
+                "input": global_context["test_plan"]
+            }
+        ],
+        callback=lambda output: (
+            shared_memory.save("graphviz_testing_flow", output) and
+            (open(os.path.join(output_base_dir, "5_testing", "Testing_Flow.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            shared_memory.save("image_testing_flow", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "5_testing", "Testing_Flow")))
         )
     ))
 

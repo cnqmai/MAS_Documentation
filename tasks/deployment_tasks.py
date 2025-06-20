@@ -1,7 +1,8 @@
 import os
 from crewai import Task
 from memory.shared_memory import SharedMemory
-from utils.output_formats import create_docx
+from utils.output_formats import create_docx, create_image
+from graphviz import Digraph
 import json
 
 # --- Hàm Callback cho DOCX ---
@@ -368,6 +369,37 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
             f"{output_base_dir}/6_deploy/Monitoring_and_Alerting_Setup_Guide.docx",
             shared_memory,
             "monitoring_alerting_guideline"
+        )
+    ))
+
+    # New Task: CI/CD Flow for Build and Deployment Plan (Graphviz)
+    tasks.append(Task(
+        description=(
+            f"Dựa trên dữ liệu build_deployment_plan:\n\n"
+            f"build_deployment_plan:\n{global_context['build_deployment_plan']}\n\n"
+            f"Tạo một sơ đồ luồng CI/CD (CI/CD Flow) cho Build and Deployment Plan để minh họa các bước trong pipeline triển khai (e.g., Build, Test, Deploy, Monitor). "
+            f"Sơ đồ phải bao gồm ít nhất 4 bước, với các liên kết thể hiện thứ tự thực hiện. "
+            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'CICD_Flow.dot' trong thư mục '{output_base_dir}/6_deployment'. "
+            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
+            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_cicd_flow' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_cicd_flow'."
+        ),
+        agent=deployment_agent,
+        expected_output=(
+            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ luồng CI/CD, lưu trong '{output_base_dir}/6_deployment/CICD_Flow.dot' và SharedMemory với khóa 'graphviz_cicd_flow'. "
+            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/6_deployment/CICD_Flow.png' và SharedMemory với khóa 'image_cicd_flow'. "
+            f"Sơ đồ rõ ràng, có ít nhất 4 bước và các liên kết thứ tự."
+        ),
+        context=[
+            {
+                "description": "Thông tin từ build_deployment_plan",
+                "expected_output": "Tóm tắt kế hoạch xây dựng và triển khai để xác định các bước CI/CD.",
+                "input": global_context["build_deployment_plan"]
+            }
+        ],
+        callback=lambda output: (
+            shared_memory.save("graphviz_cicd_flow", output) and
+            (open(os.path.join(output_base_dir, "6_deployment", "CICD_Flow.dot"), "w", encoding="utf-8").write(output), True)[-1] and
+            shared_memory.save("image_cicd_flow", create_image(Digraph(body=output.split('\n')[1:-1]), os.path.join(output_base_dir, "6_deployment", "CICD_Flow")))
         )
     ))
 
