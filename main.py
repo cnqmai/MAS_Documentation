@@ -29,19 +29,19 @@ from tasks.maintenance_tasks import create_maintenance_tasks
 from tasks.quality_gate_tasks import create_quality_gate_tasks
 from tasks.research_tasks import create_research_tasks
 
-# Cấu hình logging
+# Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def validate_agent(agent):
-    """Kiểm tra cấu hình agent để đảm bảo không có lỗi."""
+    """Validate agent configuration to ensure no errors."""
     try:
         if hasattr(agent, 'tools') and agent.tools:
             for tool in agent.tools:
                 if not isinstance(tool, (type, object)) or not hasattr(tool, '__call__'):
-                    raise ValueError(f"Công cụ không hợp lệ trong agent {agent.role}: {tool}")
-        logging.info(f"Agent {agent.role} được xác thực thành công")
+                    raise ValueError(f"Invalid tool in agent {agent.role}: {tool}")
+        logging.info(f"Agent {agent.role} validated successfully")
     except Exception as e:
-        logging.error(f"Lỗi khi xác thực agent {agent.role}: {e}")
+        logging.error(f"Error validating agent {agent.role}: {e}")
         raise
 
 def main():
@@ -74,7 +74,7 @@ def main():
         maintenance_agent = create_maintenance_agent()
         validate_agent(maintenance_agent)
     except Exception as e:
-        logging.error(f"Lỗi khi tạo agents: {e}")
+        logging.error(f"Error creating agents: {e}")
         raise
 
     # Create output folders
@@ -85,17 +85,17 @@ def main():
     for phase in phases:
         os.makedirs(os.path.join(OUTPUT_BASE_DIR, phase), exist_ok=True)
 
-    # ✅ Pre-phase: Thu thập yêu cầu ban đầu
+    # ✅ Pre-phase: Initial requirements collection
     try:
-        logging.info("Bắt đầu thu thập yêu cầu ban đầu (pre-phase)")
-        print("\n##### BẮT ĐẦU PRE-PHASE: THU THẬP YÊU CẦU BAN ĐẦU #####")
+        logging.info("Starting initial requirements collection (pre-phase)")
+        print("\n##### START PRE-PHASE: INITIAL REQUIREMENTS COLLECTION #####")
         run_input_collection_conversation(input_agent, INPUT_BASE_DIR, shared_memory)
-        print("##### KẾT THÚC PRE-PHASE: THU THẬP YÊU CẦU BAN ĐẦU #####\n")
+        print("##### END PRE-PHASE: INITIAL REQUIREMENTS COLLECTION #####\n")
     except Exception as e:
-        logging.error(f"Lỗi khi thực thi thu thập yêu cầu ban đầu: {e}", exc_info=True)
+        logging.error(f"Error during initial requirements collection: {e}", exc_info=True)
         raise
 
-    # Giai đoạn 0: Khởi tạo (Initiation)
+    # Phase 0: Initiation
     initiation_research_tasks = create_research_tasks(shared_memory, OUTPUT_BASE_DIR, researcher_agent)[:1]
     initiation_research_crew = Crew(
         agents=[researcher_agent],
@@ -103,9 +103,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 0: KHỞI TẠO #####")
+    print("\n##### START BEST PRACTICE RESEARCH - PHASE 0: INITIATION #####")
     initiation_research_crew.kickoff()
-    print("##### KẾT THÚC NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 0: KHỞI TẠO #####\n")
+    print("##### END BEST PRACTICE RESEARCH - PHASE 0: INITIATION #####\n")
 
     initiation_tasks = create_initiation_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, initiation_agent)
     initiation_crew = Crew(
@@ -114,9 +114,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU GIAI ĐOẠN 0: KHỞI TẠO #####")
+    print("\n##### START PHASE 0: INITIATION #####")
     initiation_crew.kickoff()
-    print("##### KẾT THÚC GIAI ĐOẠN 0: KHỞI TẠO #####\n")
+    print("##### END PHASE 0: INITIATION #####\n")
 
     initiation_quality_tasks = create_quality_gate_tasks(shared_memory, OUTPUT_BASE_DIR, project_manager_agent)[:1]
     initiation_quality_crew = Crew(
@@ -125,11 +125,11 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 0: KHỞI TẠO #####")
+    print("\n##### START QUALITY CHECK - PHASE 0: INITIATION #####")
     initiation_quality_crew.kickoff()
-    print("##### KẾT THÚC KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 0: KHỞI TẠO #####\n")
+    print("##### END QUALITY CHECK - PHASE 0: INITIATION #####\n")
 
-    # Giai đoạn 1: Lập kế hoạch (Planning)
+    # Phase 1: Planning
     planning_research_tasks = create_research_tasks(shared_memory, OUTPUT_BASE_DIR, researcher_agent)[1:2]
     planning_research_crew = Crew(
         agents=[researcher_agent],
@@ -137,9 +137,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 1: LẬP KẾ HOẠCH #####")
+    print("\n##### START BEST PRACTICE RESEARCH - PHASE 1: PLANNING #####")
     planning_research_crew.kickoff()
-    print("##### KẾT THÚC NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 1: LẬP KẾ HOẠCH #####\n")
+    print("##### END BEST PRACTICE RESEARCH - PHASE 1: PLANNING #####\n")
 
     planning_tasks = create_planning_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, planning_agent)
     planning_crew = Crew(
@@ -148,9 +148,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU GIAI ĐOẠN 1: LẬP KẾ HOẠCH #####")
+    print("\n##### START PHASE 1: PLANNING #####")
     planning_crew.kickoff()
-    print("##### KẾT THÚC GIAI ĐOẠN 1: LẬP KẾ HOẠCH #####\n")
+    print("##### END PHASE 1: PLANNING #####\n")
 
     planning_quality_tasks = create_quality_gate_tasks(shared_memory, OUTPUT_BASE_DIR, project_manager_agent)[1:2]
     planning_quality_crew = Crew(
@@ -159,11 +159,11 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 1: LẬP KẾ HOẠCH #####")
+    print("\n##### START QUALITY CHECK - PHASE 1: PLANNING #####")
     planning_quality_crew.kickoff()
-    print("##### KẾT THÚC KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 1: LẬP KẾ HOẠCH #####\n")
+    print("##### END QUALITY CHECK - PHASE 1: PLANNING #####\n")
 
-    # Giai đoạn 2: Yêu cầu (Requirements)
+    # Phase 2: Requirements
     requirements_research_tasks = create_research_tasks(shared_memory, OUTPUT_BASE_DIR, researcher_agent)[2:3]
     requirements_research_crew = Crew(
         agents=[researcher_agent],
@@ -171,9 +171,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU NGHIÊN C�ứU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 2: YÊU CẦU #####")
+    print("\n##### START BEST PRACTICE RESEARCH - PHASE 2: REQUIREMENTS #####")
     requirements_research_crew.kickoff()
-    print("##### KẾT THÚC NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 2: YÊU CẦU #####\n")
+    print("##### END BEST PRACTICE RESEARCH - PHASE 2: REQUIREMENTS #####\n")
 
     requirements_tasks = create_requirements_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, requirement_agent)
     requirements_crew = Crew(
@@ -182,9 +182,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU GIAI ĐOẠN 2: YÊU CẦU #####")
+    print("\n##### START PHASE 2: REQUIREMENTS #####")
     requirements_crew.kickoff()
-    print("##### KẾT THÚC GIAI ĐOẠN 2: YÊU CẦU #####\n")
+    print("##### END PHASE 2: REQUIREMENTS #####\n")
 
     requirements_quality_tasks = create_quality_gate_tasks(shared_memory, OUTPUT_BASE_DIR, project_manager_agent)[2:3]
     requirements_quality_crew = Crew(
@@ -193,11 +193,11 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 2: YÊU CẦU #####")
+    print("\n##### START QUALITY CHECK - PHASE 2: REQUIREMENTS #####")
     requirements_quality_crew.kickoff()
-    print("##### KẾT THÚC KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 2: YÊU CẦU #####\n")
+    print("##### END QUALITY CHECK - PHASE 2: REQUIREMENTS #####\n")
 
-    # Giai đoạn 3: Thiết kế (Design)
+    # Phase 3: Design
     design_research_tasks = create_research_tasks(shared_memory, OUTPUT_BASE_DIR, researcher_agent)[3:4]
     design_research_crew = Crew(
         agents=[researcher_agent],
@@ -205,9 +205,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 3: THIẾT KẾ #####")
+    print("\n##### START BEST PRACTICE RESEARCH - PHASE 3: DESIGN #####")
     design_research_crew.kickoff()
-    print("##### KẾT THÚC NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 3: THIẾT KẾ #####\n")
+    print("##### END BEST PRACTICE RESEARCH - PHASE 3: DESIGN #####\n")
 
     design_tasks = create_design_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, design_agent)
     design_crew = Crew(
@@ -216,9 +216,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU GIAI ĐOẠN 3: THIẾT KẾ #####")
+    print("\n##### START PHASE 3: DESIGN #####")
     design_crew.kickoff()
-    print("##### KẾT THÚC GIAI ĐOẠN 3: THIẾT KẾ #####\n")
+    print("##### END PHASE 3: DESIGN #####\n")
 
     design_quality_tasks = create_quality_gate_tasks(shared_memory, OUTPUT_BASE_DIR, project_manager_agent)[3:4]
     design_quality_crew = Crew(
@@ -227,11 +227,11 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 3: THIẾT KẾ #####")
+    print("\n##### START QUALITY CHECK - PHASE 3: DESIGN #####")
     design_quality_crew.kickoff()
-    print("##### KẾT THÚC KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 3: THIẾT KẾ #####\n")
+    print("##### END QUALITY CHECK - PHASE 3: DESIGN #####\n")
 
-    # Giai đoạn 4: Phát triển (Development)
+    # Phase 4: Development
     development_research_tasks = create_research_tasks(shared_memory, OUTPUT_BASE_DIR, researcher_agent)[4:5]
     development_research_crew = Crew(
         agents=[researcher_agent],
@@ -239,9 +239,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 4: PHÁT TRIỂN #####")
+    print("\n##### START BEST PRACTICE RESEARCH - PHASE 4: DEVELOPMENT #####")
     development_research_crew.kickoff()
-    print("##### KẾT THÚC NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 4: PHÁT TRIỂN #####\n")
+    print("##### END BEST PRACTICE RESEARCH - PHASE 4: DEVELOPMENT #####\n")
 
     development_tasks = create_development_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, development_agent)
     development_crew = Crew(
@@ -250,9 +250,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU GIAI ĐOẠN 4: PHÁT TRIỂN #####")
+    print("\n##### START PHASE 4: DEVELOPMENT #####")
     development_crew.kickoff()
-    print("##### KẾT THÚC GIAI ĐOẠN 4: PHÁT TRIỂN #####\n")
+    print("##### END PHASE 4: DEVELOPMENT #####\n")
 
     development_quality_tasks = create_quality_gate_tasks(shared_memory, OUTPUT_BASE_DIR, project_manager_agent)[4:5]
     development_quality_crew = Crew(
@@ -261,11 +261,11 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 4: PHÁT TRIỂN #####")
+    print("\n##### START QUALITY CHECK - PHASE 4: DEVELOPMENT #####")
     development_quality_crew.kickoff()
-    print("##### KẾT THÚC KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 4: PHÁT TRIỂN #####\n")
+    print("##### END QUALITY CHECK - PHASE 4: DEVELOPMENT #####\n")
 
-    # Giai đoạn 5: Kiểm thử (Testing)
+    # Phase 5: Testing
     testing_research_tasks = create_research_tasks(shared_memory, OUTPUT_BASE_DIR, researcher_agent)[5:6]
     testing_research_crew = Crew(
         agents=[researcher_agent],
@@ -273,9 +273,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 5: KIỂM THỬ #####")
+    print("\n##### START BEST PRACTICE RESEARCH - PHASE 5: TESTING #####")
     testing_research_crew.kickoff()
-    print("##### KẾT THÚC NGHIÊN C�ứU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 5: KIỂM THỬ #####\n")
+    print("##### END BEST PRACTICE RESEARCH - PHASE 5: TESTING #####\n")
 
     testing_tasks = create_testing_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, testing_agent)
     testing_crew = Crew(
@@ -284,9 +284,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU GIAI ĐOẠN 5: KIỂM THỬ #####")
+    print("\n##### START PHASE 5: TESTING #####")
     testing_crew.kickoff()
-    print("##### KẾT THÚC GIAI ĐOẠN 5: KIỂM THỬ #####\n")
+    print("##### END PHASE 5: TESTING #####\n")
 
     testing_quality_tasks = create_quality_gate_tasks(shared_memory, OUTPUT_BASE_DIR, project_manager_agent)[5:6]
     testing_quality_crew = Crew(
@@ -295,11 +295,11 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 5: KIỂM THỬ #####")
+    print("\n##### START QUALITY CHECK - PHASE 5: TESTING #####")
     testing_quality_crew.kickoff()
-    print("##### KẾT THÚC KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 5: KIỂM THỬ #####\n")
+    print("##### END QUALITY CHECK - PHASE 5: TESTING #####\n")
 
-    # Giai đoạn 6: Triển khai (Deployment)
+    # Phase 6: Deployment
     deployment_research_tasks = create_research_tasks(shared_memory, OUTPUT_BASE_DIR, researcher_agent)[6:7]
     deployment_research_crew = Crew(
         agents=[researcher_agent],
@@ -307,9 +307,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 6: TRIỂN KHAI #####")
+    print("\n##### START BEST PRACTICE RESEARCH - PHASE 6: DEPLOYMENT #####")
     deployment_research_crew.kickoff()
-    print("##### KẾT THÚC NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 6: TRIỂN KHAI #####\n")
+    print("##### END BEST PRACTICE RESEARCH - PHASE 6: DEPLOYMENT #####\n")
 
     deployment_tasks = create_deployment_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, deployment_agent)
     deployment_crew = Crew(
@@ -318,9 +318,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU GIAI ĐOẠN 6: TRIỂN KHAI #####")
+    print("\n##### START PHASE 6: DEPLOYMENT #####")
     deployment_crew.kickoff()
-    print("##### KẾT THÚC GIAI ĐOẠN 6: TRIỂN KHAI #####\n")
+    print("##### END PHASE 6: DEPLOYMENT #####\n")
 
     deployment_quality_tasks = create_quality_gate_tasks(shared_memory, OUTPUT_BASE_DIR, project_manager_agent)[6:7]
     deployment_quality_crew = Crew(
@@ -329,11 +329,11 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 6: TRIỂN KHAI #####")
+    print("\n##### START QUALITY CHECK - PHASE 6: DEPLOYMENT #####")
     deployment_quality_crew.kickoff()
-    print("##### KẾT THÚC KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 6: TRIỂN KHAI #####\n")
+    print("##### END QUALITY CHECK - PHASE 6: DEPLOYMENT #####\n")
 
-    # Giai đoạn 7: Bảo trì (Maintenance)
+    # Phase 7: Maintenance
     maintenance_research_tasks = create_research_tasks(shared_memory, OUTPUT_BASE_DIR, researcher_agent)[7:8]
     maintenance_research_crew = Crew(
         agents=[researcher_agent],
@@ -341,9 +341,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 7: BẢO TRÌ #####")
+    print("\n##### START BEST PRACTICE RESEARCH - PHASE 7: MAINTENANCE #####")
     maintenance_research_crew.kickoff()
-    print("##### KẾT THÚC NGHIÊN CỨU PHƯƠNG PHÁP TỐT NHẤT - GIAI ĐOẠN 7: BẢO TRÌ #####\n")
+    print("##### END BEST PRACTICE RESEARCH - PHASE 7: MAINTENANCE #####\n")
 
     maintenance_tasks = create_maintenance_tasks(shared_memory, OUTPUT_BASE_DIR, input_agent, researcher_agent, project_manager_agent, maintenance_agent)
     maintenance_crew = Crew(
@@ -352,9 +352,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU GIAI ĐOẠN 7: BẢO TRÌ #####")
+    print("\n##### START PHASE 7: MAINTENANCE #####")
     maintenance_crew.kickoff()
-    print("##### KẾT THÚC GIAI ĐOẠN 7: BẢO TRÌ #####\n")
+    print("##### END PHASE 7: MAINTENANCE #####\n")
 
     maintenance_quality_tasks = create_quality_gate_tasks(shared_memory, OUTPUT_BASE_DIR, project_manager_agent)[7:8]
     maintenance_quality_crew = Crew(
@@ -363,9 +363,9 @@ def main():
         process=Process.sequential,
         verbose=True
     )
-    print("\n##### BẮT ĐẦU KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 7: BẢO TRÌ #####")
+    print("\n##### START QUALITY CHECK - PHASE 7: MAINTENANCE #####")
     maintenance_quality_crew.kickoff()
-    print("##### KẾT THÚC KIỂM TRA CHẤT LƯỢNG - GIAI ĐOẠN 7: BẢO TRÌ #####\n")
+    print("##### END QUALITY CHECK - PHASE 7: MAINTENANCE #####\n")
 
 if __name__ == "__main__":
     main()
