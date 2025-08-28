@@ -733,20 +733,25 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
         ],
         callback=lambda output: (
             __import__('os').makedirs(os.path.join(output_base_dir, "1_planning"), exist_ok=True) or
-            shared_memory.save("graphviz_wbs_diagram", output) or
-            open(os.path.join(output_base_dir, "1_planning", "WBS_Diagram.dot"), "w", encoding="utf-8").write(output) or
+            # Lấy nội dung chuỗi một cách an toàn
             (
-                __import__('graphviz').Source(output).render(
-                    filename=os.path.join(output_base_dir, "1_planning", "WBS_Diagram"),
-                    format="png",
-                    cleanup=True
-                ),
-                shared_memory.save(
-                    "image_wbs_diagram",
-                    os.path.join(output_base_dir, "1_planning", "WBS_Diagram.png")
-                ),
-                True
-            )[-1]
+                (lambda s: (
+                    shared_memory.save("graphviz_wbs_diagram", s) and
+                    open(os.path.join(output_base_dir, "1_planning", "WBS_Diagram.dot"), "w", encoding="utf-8").write(s) and
+                    __import__('graphviz').Source(s).render(
+                        filename=os.path.join(output_base_dir, "1_planning", "WBS_Diagram"),
+                        format="png",
+                        cleanup=True
+                    ) and
+                    shared_memory.save("image_wbs_diagram", os.path.join(output_base_dir, "1_planning", "WBS_Diagram.png"))
+                ))(
+                    # Thử lấy từ các thuộc tính khác nhau, nếu không có thì chuyển thành chuỗi
+                    getattr(output, "response", None) or
+                    getattr(output, "final_output", None) or
+                    getattr(output, "result", None) or
+                    str(output)
+                )
+            )
         )
     ))
 

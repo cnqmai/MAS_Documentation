@@ -248,21 +248,22 @@ def create_initiation_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 7: Project Cost - Benefit Analysis
     tasks.append(Task(
         description=(
-            f"Below is the system_request_summary information:\n\n"
-            f"{global_context['system_request_summary']}\n\n"
-            f"Below is the business case information (if any):\n\n"
-            f"{global_context['business_case']}\n\n"
-            "Use the above data to write the 'Project Cost - Benefit Analysis' document with complete and specific content, leaving no section blank. "
-            "Do not create a template or instructions, but provide actual content for each section: general information (project name, sponsor, objectives, benefits), recommendations and alternatives, costs and resources, schedule, risks, risk analysis. "
-            "Return a JSON string containing both the DOCX content (under 'docx_content') and the XLSX data (under 'xlsx_data'). "
-            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
+            f"Based on the system_request_summary and business case information below, "
+            f"write a comprehensive 'Project Cost - Benefit Analysis' document. "
+            f"The content must be complete and specific, leaving no sections blank. "
+            f"Do NOT create a template or instructions. Provide actual content for each section: "
+            f"general information (project name, sponsor, objectives, benefits), "
+            f"recommendations and alternatives, costs and resources, schedule, risks, and risk analysis. "
+            f"Your output should be the full document text ONLY, with no extra text or explanations."
+            f"\n\n---START OF INPUTS---\n"
+            f"System Request Summary:\n{global_context['system_request_summary']}\n\n"
+            f"Business Case:\n{global_context['business_case']}\n"
+            f"---END OF INPUTS---"
         ),
         agent=initiation_agent,
         expected_output=(
-            "A valid JSON string containing two fields: "
-            "'docx_content' is the content of the cost-benefit analysis document (structured, clear, all sections filled, no blanks or placeholders), "
-            "'xlsx_data' is the spreadsheet data detailing cost/benefit items. "
-            "docx_content can be in Markdown or plain text."
+            "A complete, well-structured document body in plain text or Markdown, ready to be saved as a DOCX file. "
+            "The document must be specific and not contain any placeholders."
         ),
         context=[
             {
@@ -276,10 +277,9 @@ def create_initiation_tasks(shared_memory: SharedMemory, output_base_dir: str, i
                 "input": global_context["business_case"]
             }
         ],
-        callback=make_docx_xlsx_callback(
+        callback=make_docx_callback(
             "Project Cost - Benefit Analysis",
             f"{output_base_dir}/0_initiation/Project_Cost_Benefit_Analysis.docx",
-            f"{output_base_dir}/0_initiation/Project_Cost_Benefit_Analysis.xlsx",
             shared_memory,
             "cost_benefit_analysis"
         )
