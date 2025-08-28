@@ -5,7 +5,7 @@ from utils.output_formats import create_docx, create_image
 from graphviz import Digraph
 import json
 
-# --- Hàm Callback cho DOCX ---
+# --- DOCX Callback Function ---
 def make_docx_callback(title, filename, shared_memory, save_key):
     def callback(output_from_agent_object):
         print(f"Bắt đầu tạo DOCX cho: {title}...")
@@ -30,7 +30,7 @@ def make_docx_callback(title, filename, shared_memory, save_key):
             return False
     return callback
 
-# --- Hàm tạo Task chính ---
+# --- Main Task Creation Function ---
 def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, deployment_agent):
     tasks = []
     os.makedirs(f"{output_base_dir}/6_deployment", exist_ok=True)
@@ -51,25 +51,25 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 1: Process Guide
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu build_deployment_plan:\n\n"
+            f"Below is the build_deployment_plan data:\n\n"
             f"{global_context['build_deployment_plan']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Hướng dẫn quy trình' (Process Guide) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: giới thiệu, mục đích và phạm vi, bối cảnh, đối tượng sử dụng, tài liệu tham chiếu, thông tin quy trình, các thủ tục chính, các nhiệm vụ, chức năng, thông tin bổ sung về quy trình."
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Process Guide' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: introduction, purpose and scope, background, audience, references, process information, main procedures, tasks, functions, additional process information."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'build_deployment_plan'."
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng."
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'build_deployment_plan'."
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content."
+            "Ready to be exported to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả build_deployment_plan từ người dùng",
-            "expected_output": "Tóm tắt kế hoạch xây dựng và triển khai, chi tiết quy trình...",
+            "description": "User-provided build_deployment_plan information",
+            "expected_output": "Summary of build and deployment plan, process details...",
             "input": global_context["build_deployment_plan"]
-}],
+        }],
         callback=make_docx_callback(
-            "Hướng dẫn quy trình",
+            "Process Guide",
             f"{output_base_dir}/6_deployment/Process_Guide.docx",
             shared_memory,
             "process_guideline"
@@ -79,34 +79,34 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 2: Installation Guide
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu build_deployment_plan:\n\n"
+            f"Below is the build_deployment_plan data:\n\n"
             f"{global_context['build_deployment_plan']}\n\n"
-            f"Dưới đây là dữ liệu system_architecture:\n\n"
+            f"Below is the system_architecture data:\n\n"
             f"{global_context['system_architecture']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Hướng dẫn cài đặt' (Installation Guide) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào."
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: giới thiệu, mục đích, mục tiêu, các bên liên quan, người liên hệ, thông tin cài đặt, tổng quan hệ thống, phạm vi, môi trường, rủi ro, bảo mật, kế hoạch và yêu cầu tiền cài đặt, lịch trình cài đặt, hướng dẫn cài đặt, các giai đoạn chính, nhiệm vụ, sao lưu và phục hồi, quy trình thay đổi và rollback, hỗ trợ cài đặt, danh sách phần cứng, phần mềm, mạng, cơ sở vật chất."
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Installation Guide' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: introduction, purpose, objectives, stakeholders, contacts, installation information, system overview, scope, environment, risks, security, pre-installation plan and requirements, installation schedule, installation instructions, main phases, tasks, backup and recovery, change and rollback process, installation support, hardware, software, network, facilities list."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'build_deployment_plan' và 'system_architecture'."
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng."
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'build_deployment_plan' and 'system_architecture'."
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content."
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả build_deployment_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch xây dựng và triển khai, yêu cầu cài đặt...",
+                "description": "User-provided build_deployment_plan information",
+                "expected_output": "Summary of build and deployment plan, installation requirements...",
                 "input": global_context["build_deployment_plan"]
             },
             {
-                "description": "Thông tin mô tả system_architecture từ người dùng",
-                "expected_output": "Tóm tắt kiến trúc hệ thống, môi trường cài đặt...",
+                "description": "User-provided system_architecture information",
+                "expected_output": "Summary of system architecture, installation environment...",
                 "input": global_context["system_architecture"]
             }
         ],
         callback=make_docx_callback(
-            "Hướng dẫn cài đặt",
+            "Installation Guide",
             f"{output_base_dir}/6_deployment/Installation_Guide.docx",
             shared_memory,
             "installation_guideline"
@@ -116,34 +116,34 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 3: Software User Guide
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional_requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            f"Dưới đây là dữ liệu ui_design_template:\n\n"
+            f"Below is the ui_design_template data:\n\n"
             f"{global_context['ui_design_template']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Hướng dẫn sử dụng phần mềm' (Software User Guide) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: giới thiệu, mục đích và phạm vi, bối cảnh, đối tượng, tài liệu tham chiếu, tổng quan ứng dụng, thành phần chính, chức năng, lợi ích, phân quyền người dùng, thông tin truy cập, điều hướng, hướng dẫn menu, trang chính, các hành động, thủ tục và chức năng chính. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Software User Guide' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: introduction, purpose and scope, background, audience, references, application overview, main components, functions, benefits, user roles, access information, navigation, menu guide, main page, actions, main procedures and functions."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'functional_requirements' và 'ui_design_template'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'functional_requirements' and 'ui_design_template'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu chức năng, chức năng chính...",
+                "description": "User-provided functional_requirements information",
+                "expected_output": "Summary of functional requirements, main functions...",
                 "input": global_context["functional_requirements"]
             },
             {
-                "description": "Thông tin mô tả ui_design_template từ người dùng",
-                "expected_output": "Tóm tắt mẫu thiết kế giao diện, điều hướng...",
+                "description": "User-provided ui_design_template information",
+                "expected_output": "Summary of UI design template, navigation...",
                 "input": global_context["ui_design_template"]
             }
         ],
         callback=make_docx_callback(
-            "Hướng dẫn sử dụng phần mềm",
+            "Software User Guide",
             f"{output_base_dir}/6_deployment/Software_User_Guide.docx",
             shared_memory,
             "software_user_guideline"
@@ -153,34 +153,34 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 4: System Administration Guide
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu system_architecture:\n\n"
+            f"Below is the system_architecture data:\n\n"
             f"{global_context['system_architecture']}\n\n"
-            f"Dưới đây là dữ liệu security_architecture:\n\n"
+            f"Below is the security_architecture data:\n\n"
             f"{global_context['security_architecture']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Hướng dẫn quản trị hệ thống' (System Administration Guide) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: giới thiệu, mục đích, mục tiêu, tài liệu tham chiếu, thông tin chung hệ thống, tổng quan, tài sản dữ liệu, quy trình xử lý, môi trường (cơ sở vật chất, phần cứng, phần mềm, mạng), quản trị và bảo trì, quản trị máy chủ, tài khoản người dùng, quản trị phần mềm/hệ thống, quản trị cơ sở dữ liệu, sao lưu phục hồi. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'System Administration Guide' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: introduction, purpose, objectives, references, general system information, overview, data assets, process procedures, environment (facilities, hardware, software, network), administration and maintenance, server administration, user accounts, software/system administration, database administration, backup and recovery."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'system_architecture' và 'security_architecture'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'system_architecture' and 'security_architecture'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả system_architecture từ người dùng",
-                "expected_output": "Tóm tắt kiến trúc hệ thống, môi trường quản trị...",
+                "description": "User-provided system_architecture information",
+                "expected_output": "Summary of system architecture, administration environment...",
                 "input": global_context["system_architecture"]
             },
             {
-                "description": "Thông tin mô tả security_architecture từ người dùng",
-                "expected_output": "Tóm tắt kiến trúc bảo mật, tài sản dữ liệu...",
+                "description": "User-provided security_architecture information",
+                "expected_output": "Summary of security architecture, data assets...",
                 "input": global_context["security_architecture"]
             }
         ],
         callback=make_docx_callback(
-            "Hướng dẫn quản trị hệ thống",
+            "System Administration Guide",
             f"{output_base_dir}/6_deployment/System_Administration_Guide.docx",
             shared_memory,
             "system_admin_guideline"
@@ -190,34 +190,34 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 5: Operations Guide
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu system_architecture:\n\n"
+            f"Below is the system_architecture data:\n\n"
             f"{global_context['system_architecture']}\n\n"
-            f"Dưới đây là dữ liệu build_deployment_plan:\n\n"
+            f"Below is the build_deployment_plan data:\n\n"
             f"{global_context['build_deployment_plan']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Hướng dẫn vận hành' (Operations Guide) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: giới thiệu, mục đích, đối tượng, thông tin hệ thống, tổng quan, người liên hệ, môi trường, tài sản, giao diện hệ thống, vận hành, quản trị và bảo trì, lịch trình vận hành, phân công trách nhiệm, quy trình vận hành chi tiết, bảo trì và xử lý sự cố, quản lý thay đổi, cấu hình, quản trị hệ thống, phần mềm, máy chủ, cơ sở dữ liệu. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Operations Guide' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: introduction, purpose, audience, system information, overview, contacts, environment, assets, system interfaces, operations, administration and maintenance, operations schedule, responsibility assignment, detailed operations procedures, maintenance and troubleshooting, change management, configuration, system administration, software, servers, databases."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'system_architecture' và 'build_deployment_plan'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'system_architecture' and 'build_deployment_plan'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả system_architecture từ người dùng",
-                "expected_output": "Tóm tắt kiến trúc hệ thống, giao diện hệ thống...",
+                "description": "User-provided system_architecture information",
+                "expected_output": "Summary of system architecture, system interfaces...",
                 "input": global_context["system_architecture"]
             },
             {
-                "description": "Thông tin mô tả build_deployment_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch xây dựng và triển khai, quy trình vận hành...",
+                "description": "User-provided build_deployment_plan information",
+                "expected_output": "Summary of build and deployment plan, operations procedures...",
                 "input": global_context["build_deployment_plan"]
             }
         ],
         callback=make_docx_callback(
-            "Hướng dẫn vận hành",
+            "Operations Guide",
             f"{output_base_dir}/6_deployment/Operations_Guide.docx",
             shared_memory,
             "operations_guideline"
@@ -227,34 +227,34 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 6: Production Implementation Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu build_deployment_plan:\n\n"
+            f"Below is the build_deployment_plan data:\n\n"
             f"{global_context['build_deployment_plan']}\n\n"
-            f"Dưới đây là dữ liệu test_summary_report:\n\n"
+            f"Below is the test_summary_report data:\n\n"
             f"{global_context['test_summary_report']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch triển khai sản phẩm' (Production Implementation Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mô tả triển khai sản phẩm, mục tiêu, thiết bị bị ảnh hưởng, các bước bàn giao sản phẩm, thông tin hỗ trợ kỹ thuật, tác động tiềm tàng, thành phần phần mềm, phần cứng và bước triển khai tương ứng, kiểm thử và chấp nhận, kế hoạch rollback và dự phòng, đào tạo người dùng và tài liệu, liên hệ khẩn cấp khác. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Production Implementation Plan' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: product implementation description, objectives, affected devices, product handover steps, technical support information, potential impacts, software, hardware components and corresponding implementation steps, testing and acceptance, rollback and contingency plan, user training and documentation, other emergency contacts."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'build_deployment_plan' và 'test_summary_report'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'build_deployment_plan' and 'test_summary_report'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả build_deployment_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch xây dựng và triển khai, mô tả triển khai...",
+                "description": "User-provided build_deployment_plan information",
+                "expected_output": "Summary of build and deployment plan, implementation description...",
                 "input": global_context["build_deployment_plan"]
             },
             {
-                "description": "Thông tin mô tả test_summary_report từ người dùng",
-                "expected_output": "Tóm tắt báo cáo kiểm thử, thiết bị bị ảnh hưởng...",
+                "description": "User-provided test_summary_report information",
+                "expected_output": "Summary of test summary report, affected devices...",
                 "input": global_context["test_summary_report"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch triển khai sản phẩm",
+            "Production Implementation Plan",
             f"{output_base_dir}/6_deployment/Production_Implementation_Plan.docx",
             shared_memory,
             "production_implementation_plan"
@@ -264,34 +264,34 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 7: Production Turnover Approval
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu project_acceptance:\n\n"
+            f"Below is the project_acceptance data:\n\n"
             f"{global_context['project_acceptance']}\n\n"
-            f"Dưới đây là dữ liệu test_summary_report:\n\n"
+            f"Below is the test_summary_report data:\n\n"
             f"{global_context['test_summary_report']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Phê duyệt bàn giao sản xuất' (Production Turnover Approval) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: giới thiệu, mục đích, tổng quan hệ thống/dự án, phạm vi, yêu cầu phê duyệt bàn giao, phê duyệt và ký xác nhận. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Production Turnover Approval' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: introduction, purpose, system/project overview, scope, turnover approval requirements, approval and sign-off."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_acceptance' và 'test_summary_report'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_acceptance' and 'test_summary_report'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_acceptance từ người dùng",
-                "expected_output": "Tóm tắt văn bản nghiệm thu dự án, yêu cầu phê duyệt...",
+                "description": "User-provided project_acceptance information",
+                "expected_output": "Summary of project acceptance document, approval requirements...",
                 "input": global_context["project_acceptance"]
             },
             {
-                "description": "Thông tin mô tả test_summary_report từ người dùng",
-                "expected_output": "Tóm tắt báo cáo kiểm thử, tổng quan hệ thống...",
+                "description": "User-provided test_summary_report information",
+                "expected_output": "Summary of test summary report, system overview...",
                 "input": global_context["test_summary_report"]
             }
         ],
         callback=make_docx_callback(
-            "Phê duyệt bàn giao sản xuất",
+            "Production Turnover Approval",
             f"{output_base_dir}/6_deployment/Production_Turnover_Approval.docx",
             shared_memory,
             "production_turnover_approval"
@@ -301,34 +301,34 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 8: Deployment Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu build_deployment_plan:\n\n"
+            f"Below is the build_deployment_plan data:\n\n"
             f"{global_context['build_deployment_plan']}\n\n"
-            f"Dưới đây là dữ liệu production_implementation_plan:\n\n"
+            f"Below is the production_implementation_plan data:\n\n"
             f"{global_context['production_implementation_plan']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch triển khai' (Deployment Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mục đích, phạm vi, chiến lược triển khai, lịch trình triển khai, các bước triển khai, môi trường triển khai, kiểm thử sau triển khai, kế hoạch rollback, hỗ trợ sau triển khai. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Deployment Plan' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: purpose, scope, deployment strategy, deployment schedule, deployment steps, deployment environment, post-deployment testing, rollback plan, post-deployment support."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'build_deployment_plan' và 'production_implementation_plan'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'build_deployment_plan' and 'production_implementation_plan'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả build_deployment_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch xây dựng và triển khai, chiến lược triển khai...",
+                "description": "User-provided build_deployment_plan information",
+                "expected_output": "Summary of build and deployment plan, deployment strategy...",
                 "input": global_context["build_deployment_plan"]
             },
             {
-                "description": "Thông tin mô tả production_implementation_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch triển khai sản phẩm, lịch trình triển khai...",
+                "description": "User-provided production_implementation_plan information",
+                "expected_output": "Summary of production implementation plan, deployment schedule...",
                 "input": global_context["production_implementation_plan"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch triển khai",
+            "Deployment Plan",
             f"{output_base_dir}/6_deployment/Deployment_Plan.docx",
             shared_memory,
             "deployment_plan"
@@ -338,34 +338,34 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # Task 9: Monitoring and Alerting Setup Guide
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu system_admin_guide:\n\n"
+            f"Below is the system_admin_guide data:\n\n"
             f"{global_context['system_admin_guide']}\n\n"
-            f"Dưới đây là dữ liệu non_functional_requirements:\n\n"
+            f"Below is the non_functional_requirements data:\n\n"
             f"{global_context['non_functional_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Hướng dẫn thiết lập giám sát và cảnh báo' (Monitoring and Alerting Setup Guide) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mục đích, công cụ giám sát, cấu hình giám sát, các chỉ số cần theo dõi, thiết lập cảnh báo, quy trình xử lý sự cố, báo cáo giám sát. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Monitoring and Alerting Setup Guide' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: purpose, monitoring tools, monitoring configuration, metrics to monitor, alert setup, incident response process, monitoring report."
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=deployment_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'system_admin_guide' và 'non_functional_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'system_admin_guide' and 'non_functional_requirements'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả system_admin_guide từ người dùng",
-                "expected_output": "Tóm tắt hướng dẫn quản trị hệ thống, công cụ giám sát...",
+                "description": "User-provided system_admin_guide information",
+                "expected_output": "Summary of system admin guide, monitoring tools...",
                 "input": global_context["system_admin_guide"]
             },
             {
-                "description": "Thông tin mô tả non_functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu phi chức năng, chỉ số theo dõi...",
+                "description": "User-provided non_functional_requirements information",
+                "expected_output": "Summary of non-functional requirements, monitored metrics...",
                 "input": global_context["non_functional_requirements"]
             }
         ],
         callback=make_docx_callback(
-            "Hướng dẫn thiết lập giám sát và cảnh báo",
+            "Monitoring and Alerting Setup Guide",
             f"{output_base_dir}/6_deployment/Monitoring_and_Alerting_Setup_Guide.docx",
             shared_memory,
             "monitoring_alerting_guideline"
@@ -375,24 +375,24 @@ def create_deployment_tasks(shared_memory: SharedMemory, output_base_dir: str, i
     # New Task: CI/CD Flow for Build and Deployment Plan (Graphviz)
     tasks.append(Task(
         description=(
-            f"Dựa trên dữ liệu build_deployment_plan:\n\n"
+            f"Based on the build_deployment_plan data:\n\n"
             f"build_deployment_plan:\n{global_context['build_deployment_plan']}\n\n"
-            f"Tạo một sơ đồ luồng CI/CD (CI/CD Flow) cho Build and Deployment Plan để minh họa các bước trong pipeline triển khai (e.g., Build, Test, Deploy, Monitor). "
-            f"Sơ đồ phải bao gồm ít nhất 4 bước, với các liên kết thể hiện thứ tự thực hiện. "
-            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'CICD_Flow.dot' trong thư mục '{output_base_dir}/6_deployment'. "
-            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
-            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_cicd_flow' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_cicd_flow'."
+            f"Create a CI/CD Flow diagram for the Build and Deployment Plan to illustrate the steps in the deployment pipeline (e.g., Build, Test, Deploy, Monitor). "
+            f"The diagram must include at least 4 steps, with links showing the execution order. "
+            f"The result is Graphviz DOT code for a directed graph (digraph), saved to 'CICD_Flow.dot' in the '{output_base_dir}/6_deployment' folder. "
+            f"Render the DOT file as a PNG image using the create_image function. "
+            f"Save the DOT code to SharedMemory with key 'graphviz_cicd_flow' and the PNG image path to SharedMemory with key 'image_cicd_flow'."
         ),
         agent=deployment_agent,
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ luồng CI/CD, lưu trong '{output_base_dir}/6_deployment/CICD_Flow.dot' và SharedMemory với khóa 'graphviz_cicd_flow'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/6_deployment/CICD_Flow.png' và SharedMemory với khóa 'image_cicd_flow'. "
-            f"Sơ đồ rõ ràng, có ít nhất 4 bước và các liên kết thứ tự."
+            f"Complete Graphviz DOT code illustrating the CI/CD flow diagram, saved in '{output_base_dir}/6_deployment/CICD_Flow.dot' and SharedMemory with key 'graphviz_cicd_flow'. "
+            f"PNG image rendered from DOT, saved in '{output_base_dir}/6_deployment/CICD_Flow.png' and SharedMemory with key 'image_cicd_flow'. "
+            f"The diagram is clear, with at least 4 steps and sequential links."
         ),
         context=[
             {
-                "description": "Thông tin từ build_deployment_plan",
-                "expected_output": "Tóm tắt kế hoạch xây dựng và triển khai để xác định các bước CI/CD.",
+                "description": "Information from build_deployment_plan",
+                "expected_output": "Summarize the build and deployment plan to identify CI/CD steps.",
                 "input": global_context["build_deployment_plan"]
             }
         ],

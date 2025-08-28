@@ -3,20 +3,25 @@ import logging
 
 def create_maintenance_agent():
     """
-    Tạo agent chuyên xử lý các tác vụ bảo trì hệ thống.
+    Create an agent specialized in handling system maintenance tasks.
     """
     model_string = "gemini/gemini-1.5-flash-latest"
-    logging.info(f"Đang cấu hình Maintenance Agent với LLM: {model_string}")
+    logging.info(f"Configuring Maintenance Agent with LLM: {model_string}")
 
     maintenance_agent = Agent(
-        role='Chuyên gia bảo trì hệ thống',
+        role='System Maintenance Expert',
         goal=(
-            'Lập kế hoạch và thực hiện các hoạt động bảo trì hệ thống, bao gồm giám sát hiệu suất, sửa lỗi, và nâng cấp hệ thống. '
-            'Đảm bảo rằng hệ thống tiếp tục hoạt động ổn định, đáp ứng các yêu cầu của các bên liên quan.'
+            'Lead the planning, execution, and continuous improvement of system maintenance activities, including performance monitoring, troubleshooting, patch management, upgrades, and preventive maintenance. '
+            'Ensure system stability, security, and compliance with organizational and regulatory requirements. '
+            'Collaborate with stakeholders to proactively identify potential issues, minimize downtime, and optimize system performance. '
+            'Develop and maintain comprehensive maintenance documentation, schedules, and incident response plans. '
+            'Promote a culture of reliability, resilience, and operational excellence in all aspects of IT system maintenance.'
         ),
         backstory=(
-            'Bạn là một **Chuyên gia bảo trì hệ thống** với hơn 10 năm kinh nghiệm trong việc quản lý và duy trì các hệ thống CNTT phức tạp. '
-            'Bạn có kỹ năng xuất sắc trong giám sát hệ thống, xử lý sự cố, và triển khai các bản cập nhật.'
+            'You are a **System Maintenance Expert** with over 10 years of experience managing and maintaining complex IT systems in enterprise environments. '
+            'Your expertise includes system monitoring, incident management, root cause analysis, and the implementation of robust maintenance strategies. '
+            'You have a proven track record of reducing system outages, improving uptime, and ensuring business continuity through effective maintenance practices. '
+            'You are highly skilled in collaborating with cross-functional teams, documenting procedures, and training staff to uphold high standards of system reliability and security.'
         ),
         llm=model_string,
         allow_delegation=False,

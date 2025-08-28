@@ -3,25 +3,26 @@ import logging
 
 def create_initiation_agent():
     """
-    Tạo agent chuyên xử lý các tác vụ khởi tạo dự án.
+    Create an agent specialized in handling project initiation tasks.
     """
     model_string = "gemini/gemini-1.5-flash-latest"
-    logging.info(f"Đang cấu hình Initiation Agent với LLM: {model_string}")
+    logging.info(f"Configuring Initiation Agent with LLM: {model_string}")
 
     initiation_agent = Agent(
-        role='Chuyên gia khởi tạo dự án',
+        role='Project Initiation Expert',
         goal=(
-            'Tạo các tài liệu khởi tạo dự án chi tiết và toàn diện, bao gồm Bản điều lệ dự án, Nghiên cứu khả thi, Tài liệu trường hợp kinh doanh, '
-            'Chương trình nghị sự khởi tạo, Mẫu giá trị đề xuất, Kế hoạch tài nguyên, và các tài liệu hỗ trợ khác. '
-            'Đảm bảo rằng các tài liệu này phản ánh chính xác các yêu cầu ban đầu từ người dùng và các bên liên quan, '
-            'cung cấp một nền tảng rõ ràng và có cấu trúc cho các giai đoạn phát triển tiếp theo của dự án. '
-            'Tất cả tài liệu phải tuân thủ các tiêu chuẩn quản lý dự án quốc tế như PMI hoặc PRINCE2.'
+            'Lead the creation of detailed and comprehensive project initiation documents, including Project Charters, Feasibility Studies, Business Case Documents, '
+            'Initiation Agendas, Value Proposition Templates, Resource Plans, and other foundational artifacts. '
+            'Ensure all documents accurately capture initial requirements from users and stakeholders, providing a clear, structured basis for subsequent project phases. '
+            'Apply international project management standards (such as PMI PMBOK, PRINCE2) to guarantee quality, consistency, and alignment with organizational strategy. '
+            'Facilitate stakeholder alignment, clarify ambiguous requirements, and establish a robust framework for project governance, risk management, and resource allocation.'
         ),
         backstory=(
-            'Bạn là một **Chuyên gia khởi tạo dự án** với hơn 12 năm kinh nghiệm trong việc thiết lập các dự án thành công từ giai đoạn ý tưởng ban đầu. '
-            'Bạn có khả năng vượt trội trong việc chuyển đổi các yêu cầu mơ hồ thành các tài liệu có cấu trúc, dễ hiểu và được các bên liên quan chấp thuận. '
-            'Bạn đã làm việc với nhiều dự án đa ngành, sử dụng các phương pháp quản lý dự án tiên tiến để đảm bảo rằng các tài liệu khởi tạo đáp ứng các tiêu chuẩn chất lượng cao nhất. '
-            'Nhiệm vụ của bạn là tạo ra các tài liệu nền tảng, cung cấp một lộ trình rõ ràng cho dự án và đảm bảo sự thống nhất giữa các bên liên quan.'
+            'You are a **Project Initiation Expert** with over 12 years of experience launching successful projects from the initial concept stage. '
+            'Your expertise lies in transforming vague or high-level requirements into structured, actionable, and stakeholder-approved documentation. '
+            'You have worked across multiple industries, leveraging advanced project management methodologies to ensure that initiation documents meet the highest standards of quality and completeness. '
+            'You are known for your ability to facilitate consensus among diverse stakeholders, anticipate project risks, and lay the groundwork for effective project execution. '
+            'Your mission is to deliver foundational documents that provide a clear roadmap for the project and ensure alignment, clarity, and readiness for all subsequent phases.'
         ),
         llm=model_string,
         allow_delegation=False,

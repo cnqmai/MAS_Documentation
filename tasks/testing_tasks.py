@@ -5,10 +5,10 @@ from utils.output_formats import create_docx, create_xlsx, create_image
 from graphviz import Digraph
 import json
 
-# --- Hàm Callback cho DOCX ---
+# --- DOCX Callback Function ---
 def make_docx_callback(title, filename, shared_memory, save_key):
     def callback(output_from_agent_object):
-        print(f"Bắt đầu tạo DOCX cho: {title}...")
+        print(f"Starting DOCX creation for: {title}...")
         content_raw_string = (
             getattr(output_from_agent_object, "result", None)
             or getattr(output_from_agent_object, "response", None)
@@ -17,23 +17,23 @@ def make_docx_callback(title, filename, shared_memory, save_key):
         )
         content_raw_string = str(content_raw_string)
         if not content_raw_string.strip():
-            print(f"⚠️  Lưu ý: Agent không trả về nội dung cho task '{title}'.")
+            print(f"⚠️  Note: Agent did not return content for task '{title}'.")
             return False
         content_paragraphs = content_raw_string.split('\n')
         docx_path = create_docx(title, content_paragraphs, filename)
         shared_memory.save(save_key, content_raw_string)
         if docx_path:
-            print(f"✅ DOCX '{filename}' đã tạo thành công và lưu vào SharedMemory '{save_key}'.")
+            print(f"✅ DOCX '{filename}' created successfully and saved to SharedMemory '{save_key}'.")
             return True
         else:
-            print(f"❌ Lỗi hệ thống: Không thể tạo DOCX '{filename}'.")
+            print(f"❌ System error: Unable to create DOCX '{filename}'.")
             return False
     return callback
 
-# --- Hàm Callback cho XLSX ---
+# --- XLSX Callback Function ---
 def make_docx_xlsx_callback(title, filename, shared_memory, save_key, content_type="docx"):
     def callback(output_from_agent_object):
-        print(f"Bắt đầu tạo {content_type.upper()} cho: {title}...")
+        print(f"Starting {content_type.upper()} creation for: {title}...")
         content_raw = (
             getattr(output_from_agent_object, "result", None)
             or getattr(output_from_agent_object, "response", None)
@@ -42,7 +42,7 @@ def make_docx_xlsx_callback(title, filename, shared_memory, save_key, content_ty
         )
         content_raw_string = str(content_raw)
         if not content_raw_string.strip():
-            print(f"⚠️  Lưu ý: Agent không trả về nội dung cho task '{title}'.")
+            print(f"⚠️  Note: Agent did not return content for task '{title}'.")
             return False
         success = False
         if content_type == "xlsx":
@@ -52,7 +52,7 @@ def make_docx_xlsx_callback(title, filename, shared_memory, save_key, content_ty
                 shared_memory.save(save_key, content_raw_string)
                 success = bool(file_path)
             except json.JSONDecodeError:
-                print(f"❌ Lỗi: Không thể phân tích JSON cho '{title}'.")
+                print(f"❌ Error: Unable to parse JSON for '{title}'.")
                 return False
         else:
             content_paragraphs = content_raw_string.split('\n')
@@ -60,14 +60,14 @@ def make_docx_xlsx_callback(title, filename, shared_memory, save_key, content_ty
             shared_memory.save(save_key, content_raw_string)
             success = bool(file_path)
         if success:
-            print(f"✅ {content_type.upper()} '{filename}' đã tạo thành công và lưu vào SharedMemory '{save_key}'.")
+            print(f"✅ {content_type.upper()} '{filename}' created successfully and saved to SharedMemory '{save_key}'.")
             return True
         else:
-            print(f"❌ Lỗi hệ thống: Không thể tạo {content_type.upper()} '{filename}'.")
+            print(f"❌ System error: Unable to create {content_type.upper()} '{filename}'.")
             return False
     return callback
 
-# --- Hàm tạo Task chính ---
+# --- Main Task Creation Function ---
 def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, testing_agent):
     tasks = []
     os.makedirs(f"{output_base_dir}/5_testing", exist_ok=True)
@@ -95,25 +95,25 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 1: Documentation Quality Assurance Checklist
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu dev_standards:\n\n"
+            f"Below is the dev_standards data:\n\n"
             f"{global_context['dev_standards']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách kiểm tra đảm bảo chất lượng tài liệu' (Documentation Quality Assurance Checklist) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: thuộc tính tài liệu, track changes, trang bìa, mục lục, header/footer, chính tả và ngữ pháp, định dạng và bố cục, từ viết tắt, phụ lục, thông tin liên hệ, cross-reference, chú thích, hình ảnh, liên kết, chỉ mục, ngắt trang, sơ đồ quy trình, bảng biểu. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Documentation Quality Assurance Checklist' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: document properties, track changes, cover page, table of contents, header/footer, spelling and grammar, formatting and layout, abbreviations, appendix, contact information, cross-reference, footnotes, images, links, index, page breaks, process diagrams, tables. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=project_manager_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'dev_standards'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'dev_standards'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả dev_standards từ người dùng",
-            "expected_output": "Tóm tắt tiêu chuẩn phát triển, yêu cầu tài liệu...",
+            "description": "User-provided dev_standards information",
+            "expected_output": "Summary of development standards, document requirements...",
             "input": global_context["dev_standards"]
         }],
         callback=make_docx_callback(
-            "Danh sách kiểm tra đảm bảo chất lượng tài liệu",
+            "Documentation Quality Assurance Checklist",
             f"{output_base_dir}/5_testing/Documentation_QA_Checklist.docx",
             shared_memory,
             "doc_qa_checklist"
@@ -123,34 +123,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 2: Building Test Scenarios
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional_requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            f"Dưới đây là dữ liệu use_case_template:\n\n"
+            f"Below is the use_case_template data:\n\n"
             f"{global_context['use_case_template']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Xây dựng kịch bản kiểm thử' (Building Test Scenarios) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: phân biệt test case và scenario, cách xây dựng test scenario tốt, mã phiên bản, mã build, ID kịch bản, mô tả, mục tiêu, dữ liệu thử nghiệm, ngày sửa đổi, người kiểm thử, người duyệt, các bước kiểm thử. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Building Test Scenarios' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: difference between test case and scenario, how to build good test scenarios, version code, build code, scenario ID, description, objectives, test data, revision date, tester, reviewer, test steps. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'functional_requirements' và 'use_case_template'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'functional_requirements' and 'use_case_template'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu chức năng, mục tiêu kiểm thử...",
+                "description": "User-provided functional_requirements information",
+                "expected_output": "Summary of functional requirements, test objectives...",
                 "input": global_context["functional_requirements"]
             },
             {
-                "description": "Thông tin mô tả use_case_template từ người dùng",
-                "expected_output": "Tóm tắt kịch bản sử dụng, các bước kiểm thử...",
+                "description": "User-provided use_case_template information",
+                "expected_output": "Summary of usage scenarios, test steps...",
                 "input": global_context["use_case_template"]
             }
         ],
         callback=make_docx_callback(
-            "Xây dựng kịch bản kiểm thử",
+            "Building Test Scenarios",
             f"{output_base_dir}/5_testing/Building_Test_Scenarios.docx",
             shared_memory,
             "test_scenarios"
@@ -160,41 +160,41 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 3: Test Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu rtm:\n\n"
+            f"Below is the rtm data:\n\n"
             f"{global_context['rtm']}\n\n"
-            f"Dưới đây là dữ liệu project_plan:\n\n"
+            f"Below is the project_plan data:\n\n"
             f"{global_context['project_plan']}\n\n"
-            f"Dưới đây là dữ liệu non_functional_requirements:\n\n"
+            f"Below is the non_functional_requirements data:\n\n"
             f"{global_context['non_functional_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch kiểm thử' (Test Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mô tả phương pháp kiểm thử, phân loại kiểm thử (đơn vị, tích hợp, UAT,...), các ràng buộc, giả định, quy trình thông báo, leo thang vấn đề, các thước đo chất lượng, tiêu chí tạm dừng và khôi phục kiểm thử, phê duyệt. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Test Plan' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: description of testing methods, classification of tests (unit, integration, UAT,...), constraints, assumptions, issue reporting process, escalation process, quality metrics, test pause and resume criteria, approval. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'rtm', 'project_plan', và 'non_functional_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'rtm', 'project_plan', and 'non_functional_requirements'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả rtm từ người dùng",
-                "expected_output": "Tóm tắt ma trận truy xuất nguồn gốc, phương pháp kiểm thử...",
+                "description": "User-provided rtm information",
+                "expected_output": "Summary of traceability matrix, testing methods...",
                 "input": global_context["rtm"]
             },
             {
-                "description": "Thông tin mô tả project_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch dự án, phân loại kiểm thử...",
+                "description": "User-provided project_plan information",
+                "expected_output": "Summary of project plan, test classification...",
                 "input": global_context["project_plan"]
             },
             {
-                "description": "Thông tin mô tả non_functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu phi chức năng, thước đo chất lượng...",
+                "description": "User-provided non_functional_requirements information",
+                "expected_output": "Summary of non-functional requirements, quality metrics...",
                 "input": global_context["non_functional_requirements"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch kiểm thử",
+            "Test Plan",
             f"{output_base_dir}/5_testing/Test_Plan.docx",
             shared_memory,
             "test_plan"
@@ -204,34 +204,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 4: System Quality Assurance Checklist
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu test_plan:\n\n"
+            f"Below is the test_plan data:\n\n"
             f"{global_context['test_plan']}\n\n"
-            f"Dưới đây là dữ liệu srs:\n\n"
+            f"Below is the srs data:\n\n"
             f"{global_context['srs']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách kiểm tra đảm bảo chất lượng hệ thống' (System Quality Assurance Checklist) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: quản lý dự án (nguồn lực, quy trình, giám sát), phương pháp phát triển phần mềm/phần cứng, rà soát kỹ thuật, thông tin yêu cầu, thiết kế, mã nguồn, lịch sử bảo trì, hiệu năng, sản phẩm/phần cứng/phần mềm mua ngoài, bảo mật, tương thích, sạch virus. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'System Quality Assurance Checklist' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: project management (resources, processes, monitoring), software/hardware development methods, technical reviews, requirements information, design, source code, maintenance history, performance, third-party products/software/hardware, security, compatibility, virus-free. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'test_plan' và 'srs'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'test_plan' and 'srs'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả test_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch kiểm thử, quản lý dự án...",
+                "description": "User-provided test_plan information",
+                "expected_output": "Summary of test plan, project management...",
                 "input": global_context["test_plan"]
             },
             {
-                "description": "Thông tin mô tả srs từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu hệ thống, thông tin yêu cầu...",
+                "description": "User-provided srs information",
+                "expected_output": "Summary of system requirements, requirements information...",
                 "input": global_context["srs"]
             }
         ],
         callback=make_docx_callback(
-            "Danh sách kiểm tra đảm bảo chất lượng hệ thống",
+            "System Quality Assurance Checklist",
             f"{output_base_dir}/5_testing/System_QA_Checklist.docx",
             shared_memory,
             "system_qa_checklist"
@@ -241,34 +241,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 5: System Test Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu test_plan:\n\n"
+            f"Below is the test_plan data:\n\n"
             f"{global_context['test_plan']}\n\n"
-            f"Dưới đây là dữ liệu srs:\n\n"
+            f"Below is the srs data:\n\n"
             f"{global_context['srs']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch kiểm thử hệ thống' (System Test Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mục tiêu và tiêu chí vào/ra kiểm thử, phạm vi và loại kiểm thử, phân tích rủi ro, môi trường kiểm thử (phần cứng/phần mềm), lịch kiểm thử, ma trận kiểm thử (điều kiện, rủi ro, hướng dẫn). "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'System Test Plan' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: test entry/exit criteria, test scope and types, risk analysis, test environment (hardware/software), test schedule, test matrix (conditions, risks, instructions). "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'test_plan' và 'srs'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'test_plan' and 'srs'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả test_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch kiểm thử, mục tiêu kiểm thử...",
+                "description": "User-provided test_plan information",
+                "expected_output": "Summary of test plan, test objectives...",
                 "input": global_context["test_plan"]
             },
             {
-                "description": "Thông tin mô tả srs từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu hệ thống, phạm vi kiểm thử...",
+                "description": "User-provided srs information",
+                "expected_output": "Summary of system requirements, test scope...",
                 "input": global_context["srs"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch kiểm thử hệ thống",
+            "System Test Plan",
             f"{output_base_dir}/5_testing/System_Test_Plan.docx",
             shared_memory,
             "system_test_plan"
@@ -278,34 +278,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 6: User Acceptance Test Plan (UAT)
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional_requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            f"Dưới đây là dữ liệu brd:\n\n"
+            f"Below is the brd data:\n\n"
             f"{global_context['brd']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch kiểm thử chấp nhận người dùng' (User Acceptance Test Plan - UAT) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mục đích, tài liệu tham chiếu, mô tả kiểm thử, tiêu chí vào/ra, phạm vi, hạng mục kiểm thử, rủi ro, giả định, ràng buộc, môi trường kiểm thử, kiểm thử chức năng, lịch kiểm thử, vai trò và trách nhiệm. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'User Acceptance Test Plan (UAT)' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: purpose, reference documents, test description, entry/exit criteria, scope, test items, risks, assumptions, constraints, test environment, functional testing, test schedule, roles and responsibilities. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'functional_requirements' và 'brd'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'functional_requirements' and 'brd'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu chức năng, mô tả kiểm thử...",
+                "description": "User-provided functional_requirements information",
+                "expected_output": "Summary of functional requirements, test description...",
                 "input": global_context["functional_requirements"]
             },
             {
-                "description": "Thông tin mô tả brd từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu kinh doanh, mục đích UAT...",
+                "description": "User-provided brd information",
+                "expected_output": "Summary of business requirements, UAT purpose...",
                 "input": global_context["brd"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch kiểm thử chấp nhận người dùng",
+            "User Acceptance Test Plan (UAT)",
             f"{output_base_dir}/5_testing/User_Acceptance_Test_Plan.docx",
             shared_memory,
             "uat_plan"
@@ -315,34 +315,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 7: Test Case Specification
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu test_scenarios:\n\n"
+            f"Below is the test_scenarios data:\n\n"
             f"{global_context['test_scenarios']}\n\n"
-            f"Dưới đây là dữ liệu rtm:\n\n"
+            f"Below is the rtm data:\n\n"
             f"{global_context['rtm']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Đặc tả trường hợp kiểm thử' (Test Case Specification) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: ID test case, mô tả, mục tiêu, điều kiện tiên quyết, dữ liệu kiểm thử, các bước thực hiện, kết quả mong đợi, trạng thái pass/fail. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Test Case Specification' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: test case ID, description, objectives, prerequisites, test data, steps, expected results, pass/fail status. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'test_scenarios' và 'rtm'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'test_scenarios' and 'rtm'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả test_scenarios từ người dùng",
-                "expected_output": "Tóm tắt kịch bản kiểm thử, ID test case...",
+                "description": "User-provided test_scenarios information",
+                "expected_output": "Summary of test scenarios, test case IDs...",
                 "input": global_context["test_scenarios"]
             },
             {
-                "description": "Thông tin mô tả rtm từ người dùng",
-                "expected_output": "Tóm tắt ma trận truy xuất nguồn gốc, điều kiện tiên quyết...",
+                "description": "User-provided rtm information",
+                "expected_output": "Summary of traceability matrix, prerequisites...",
                 "input": global_context["rtm"]
             }
         ],
         callback=make_docx_callback(
-            "Đặc tả trường hợp kiểm thử",
+            "Test Case Specification",
             f"{output_base_dir}/5_testing/Test_Case_Specification.docx",
             shared_memory,
             "test_case_spec"
@@ -352,34 +352,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 8: Testing Bug Report
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu test_case_spec:\n\n"
+            f"Below is the test_case_spec data:\n\n"
             f"{global_context['test_case_spec']}\n\n"
-            f"Dưới đây là dữ liệu system_test_plan:\n\n"
+            f"Below is the system_test_plan data:\n\n"
             f"{global_context['system_test_plan']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Báo cáo lỗi kiểm thử' (Testing Bug Report) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mô tả lỗi, vị trí xuất hiện, mức độ nghiêm trọng, trạng thái, mức ưu tiên, môi trường thử nghiệm, phương pháp và người phụ trách. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Testing Bug Report' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: bug description, location, severity, status, priority, testing environment, method and responsible person. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'test_case_spec' và 'system_test_plan'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'test_case_spec' and 'system_test_plan'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả test_case_spec từ người dùng",
-                "expected_output": "Tóm tắt đặc tả trường hợp kiểm thử, mô tả lỗi...",
+                "description": "User-provided test_case_spec information",
+                "expected_output": "Summary of test case specifications, bug descriptions...",
                 "input": global_context["test_case_spec"]
             },
             {
-                "description": "Thông tin mô tả system_test_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch kiểm thử hệ thống, môi trường thử nghiệm...",
+                "description": "User-provided system_test_plan information",
+                "expected_output": "Summary of system test plan, testing environment...",
                 "input": global_context["system_test_plan"]
             }
         ],
         callback=make_docx_callback(
-            "Báo cáo lỗi kiểm thử",
+            "Testing Bug Report",
             f"{output_base_dir}/5_testing/Testing_Bug_Report.docx",
             shared_memory,
             "bug_report"
@@ -389,26 +389,26 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 9: Testing Bug List
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu bug_report:\n\n"
+            f"Below is the bug_report data:\n\n"
             f"{global_context['bug_report']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách lỗi kiểm thử' (Testing Bug List) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: ngày phát hiện, ID lỗi, ID test case, tên và mô tả lỗi, mức độ nghiêm trọng, trạng thái, người kiểm thử, phương pháp thử nghiệm. "
-            "Tài liệu phải được định dạng dưới dạng bảng và sẵn sàng để chuyển sang file XLSX. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Testing Bug List' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: discovery date, bug ID, test case ID, bug name and description, severity, status, tester, testing method. "
+            "The document must be formatted as a table and ready to be exported to XLSX. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một bảng hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'bug_report'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file XLSX."
+            "A complete table, fully filled out based on actual data in 'bug_report'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to XLSX."
         ),
         context=[{
-            "description": "Thông tin mô tả bug_report từ người dùng",
-            "expected_output": "Tóm tắt báo cáo lỗi, ID lỗi, mô tả lỗi...",
+            "description": "User-provided bug_report information",
+            "expected_output": "Summary of bug reports, bug IDs, bug descriptions...",
             "input": global_context["bug_report"]
         }],
         callback=make_docx_xlsx_callback(
-            "Danh sách lỗi kiểm thử",
+            "Testing Bug List",
             f"{output_base_dir}/5_testing/Testing_Bug_List.xlsx",
             shared_memory,
             "bug_list",
@@ -419,34 +419,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 10: Regression Testing Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu bug_report:\n\n"
+            f"Below is the bug_report data:\n\n"
             f"{global_context['bug_report']}\n\n"
-            f"Dưới đây là dữ liệu rtm:\n\n"
+            f"Below is the rtm data:\n\n"
             f"{global_context['rtm']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch kiểm thử hồi quy' (Regression Testing Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: định nghĩa và phạm vi kiểm thử hồi quy, phương pháp kiểm thử, loại kiểm thử, rủi ro, giả định, ràng buộc, lịch trình (công việc, số ngày, ngày bắt đầu/kết thúc), hướng dẫn (bước kiểm thử, kết quả mong đợi, pass/fail). "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Regression Testing Plan' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: definition and scope of regression testing, testing methods, types of tests, risks, assumptions, constraints, schedule (tasks, duration, start/end dates), instructions (test steps, expected results, pass/fail). "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'bug_report' và 'rtm'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'bug_report' and 'rtm'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả bug_report từ người dùng",
-                "expected_output": "Tóm tắt báo cáo lỗi, định nghĩa kiểm thử hồi quy...",
+                "description": "User-provided bug_report information",
+                "expected_output": "Summary of bug reports, regression testing definition...",
                 "input": global_context["bug_report"]
             },
             {
-                "description": "Thông tin mô tả rtm từ người dùng",
-                "expected_output": "Tóm tắt ma trận truy xuất nguồn gốc, phạm vi kiểm thử...",
+                "description": "User-provided rtm information",
+                "expected_output": "Summary of traceability matrix, test scope...",
                 "input": global_context["rtm"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch kiểm thử hồi quy",
+            "Regression Testing Plan",
             f"{output_base_dir}/5_testing/Regression_Testing_Plan.docx",
             shared_memory,
             "regression_test_plan"
@@ -456,34 +456,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 11: Project Acceptance Document
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu test_summary_report:\n\n"
+            f"Below is the test_summary_report data:\n\n"
             f"{global_context['test_summary_report']}\n\n"
-            f"Dưới đây là dữ liệu uat_plan:\n\n"
+            f"Below is the uat_plan data:\n\n"
             f"{global_context['uat_plan']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Văn bản nghiệm thu dự án' (Project Acceptance Document) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: tên và mã dự án, bộ phận sử dụng, người bảo trợ, quản lý dự án, mô tả dự án, tuyên bố chấp thuận, chữ ký xác nhận. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Project Acceptance Document' with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: project name and code, user department, sponsor, project manager, project description, acceptance statement, signature confirmation. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'test_summary_report' và 'uat_plan'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'test_summary_report' and 'uat_plan'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả test_summary_report từ người dùng",
-                "expected_output": "Tóm tắt báo cáo kiểm thử, mô tả dự án...",
+                "description": "User-provided test_summary_report information",
+                "expected_output": "Summary of test summary report, project description...",
                 "input": global_context["test_summary_report"]
             },
             {
-                "description": "Thông tin mô tả uat_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch UAT, người bảo trợ, quản lý dự án...",
+                "description": "User-provided uat_plan information",
+                "expected_output": "Summary of UAT plan, sponsor, project manager...",
                 "input": global_context["uat_plan"]
             }
         ],
         callback=make_docx_callback(
-            "Văn bản nghiệm thu dự án",
+            "Project Acceptance Document",
             f"{output_base_dir}/5_testing/Project_Acceptance_Document.docx",
             shared_memory,
             "project_acceptance"
@@ -493,34 +493,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 12: Test Summary Report
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu bug_report:\n\n"
+            f"Below is the bug_report data:\n\n"
             f"{global_context['bug_report']}\n\n"
-            f"Dưới đây là dữ liệu test_case_spec:\n\n"
+            f"Below is the test_case_spec data:\n\n"
             f"{global_context['test_case_spec']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Báo cáo tóm tắt kiểm thử' (Test Summary Report) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: tổng quan kiểm thử, kết quả kiểm thử, số lượng test case (pass/fail), danh sách lỗi chính, khuyến nghị cải tiến, trạng thái sẵn sàng triển khai. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Test Summary Report' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: test overview, test results, number of test cases (pass/fail), list of major bugs, improvement recommendations, deployment readiness status. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'bug_report' và 'test_case_spec'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'bug_report' and 'test_case_spec'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả bug_report từ người dùng",
-                "expected_output": "Tóm tắt báo cáo lỗi, danh sách lỗi chính...",
+                "description": "User-provided bug_report information",
+                "expected_output": "Summary of bug reports, major bugs...",
                 "input": global_context["bug_report"]
             },
             {
-                "description": "Thông tin mô tả test_case_spec từ người dùng",
-                "expected_output": "Tóm tắt đặc tả trường hợp kiểm thử, kết quả kiểm thử...",
+                "description": "User-provided test_case_spec information",
+                "expected_output": "Summary of test case specifications, test results...",
                 "input": global_context["test_case_spec"]
             }
         ],
         callback=make_docx_callback(
-            "Báo cáo tóm tắt kiểm thử",
+            "Test Summary Report",
             f"{output_base_dir}/5_testing/Test_Summary_Report.docx",
             shared_memory,
             "test_summary_report"
@@ -530,35 +530,35 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 13: Risk Management Register
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu risk_analysis_plan:\n\n"
+            f"Below is the risk_analysis_plan data:\n\n"
             f"{global_context['risk_analysis_plan']}\n\n"
-            f"Dưới đây là dữ liệu bug_report:\n\n"
+            f"Below is the bug_report data:\n\n"
             f"{global_context['bug_report']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Sổ đăng ký quản lý rủi ro' (Risk Management Register) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mô tả rủi ro, người chịu trách nhiệm, ngày báo cáo, ngày cập nhật, mức độ ảnh hưởng, xác suất xảy ra, thời gian tác động, trạng thái phản hồi, hành động đã/thực hiện/đang lên kế hoạch, tình trạng rủi ro hiện tại. "
-            "Tài liệu phải được định dạng dưới dạng bảng và sẵn sàng để chuyển sang file XLSX. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Risk Management Register' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: risk description, responsible person, report date, update date, impact level, probability, impact duration, response status, actions taken/planned, current risk status. "
+            "The document must be formatted as a table and ready to be exported to XLSX. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một bảng hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'risk_analysis_plan' và 'bug_report'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file XLSX."
+            "A complete table, fully filled out based on actual data in 'risk_analysis_plan' and 'bug_report'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to XLSX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả risk_analysis_plan từ người dùng",
-                "expected_output": "Tóm tắt kế hoạch phân tích rủi ro, mô tả rủi ro...",
+                "description": "User-provided risk_analysis_plan information",
+                "expected_output": "Summary of risk analysis plan, risk descriptions...",
                 "input": global_context["risk_analysis_plan"]
             },
             {
-                "description": "Thông tin mô tả bug_report từ người dùng",
-                "expected_output": "Tóm tắt báo cáo lỗi, mức độ ảnh hưởng...",
+                "description": "User-provided bug_report information",
+                "expected_output": "Summary of bug reports, impact levels...",
                 "input": global_context["bug_report"]
             }
         ],
         callback=make_docx_xlsx_callback(
-            "Sổ đăng ký quản lý rủi ro",
+            "Risk Management Register",
             f"{output_base_dir}/5_testing/Risk_Management_Register.xlsx",
             shared_memory,
             "risk_management_register",
@@ -569,34 +569,34 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # Task 14: Project Status Report
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu test_summary_report:\n\n"
+            f"Below is the test_summary_report data:\n\n"
             f"{global_context['test_summary_report']}\n\n"
-            f"Dưới đây là dữ liệu dev_progress_report:\n\n"
+            f"Below is the dev_progress_report data:\n\n"
             f"{global_context['dev_progress_report']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Báo cáo tình trạng dự án' (Project Status Report) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: phân phối báo cáo, tổng quan dự án, quản trị hành chính, hoạt động đã thực hiện, vấn đề hoặc chậm trễ, vấn đề cần xử lý, hoạt động dự kiến kỳ tới, trạng thái deliverables, hoàn thành theo WBS, nhiệm vụ WBS (hoàn thành, quá hạn, sắp đến), thay đổi đang mở/đã duyệt/bị từ chối, vấn đề đang mở/đã đóng, rủi ro đang mở/đã xử lý. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write the 'Project Status Report' document with complete and specific content, leaving no section blank. "
+            "Do not create a template or instructions, provide actual content for each section: report distribution, project overview, administrative management, completed activities, issues or delays, issues to be addressed, planned activities for the next period, deliverables status, completion according to WBS, WBS tasks (completed, overdue, upcoming), changes (open/approved/rejected), issues (open/closed), risks (open/addressed). "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=testing_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'test_summary_report' và 'dev_progress_report'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'test_summary_report' and 'dev_progress_report'. "
+            "The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+            "Ready to be exported to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả test_summary_report từ người dùng",
-                "expected_output": "Tóm tắt báo cáo kiểm thử, trạng thái deliverables...",
+                "description": "User-provided test_summary_report information",
+                "expected_output": "Summary of test summary report, deliverables status...",
                 "input": global_context["test_summary_report"]
             },
             {
-                "description": "Thông tin mô tả dev_progress_report từ người dùng",
-                "expected_output": "Tóm tắt báo cáo tiến độ phát triển, hoạt động đã thực hiện...",
+                "description": "User-provided dev_progress_report information",
+                "expected_output": "Summary of development progress report, completed activities...",
                 "input": global_context["dev_progress_report"]
             }
         ],
         callback=make_docx_callback(
-            "Báo cáo tình trạng dự án",
+            "Project Status Report",
             f"{output_base_dir}/5_testing/Project_Status_Report.docx",
             shared_memory,
             "project_status_report"
@@ -607,24 +607,24 @@ def create_testing_tasks(shared_memory: SharedMemory, output_base_dir: str, inpu
     # New Task: Testing Flow for Test Plan (Graphviz)
     tasks.append(Task(
         description=(
-            f"Dựa trên dữ liệu test_plan:\n\n"
+            f"Based on the test_plan data:\n\n"
             f"test_plan:\n{global_context['test_plan']}\n\n"
-            f"Tạo một sơ đồ luồng kiểm thử (Testing Flow) cho Test Plan để minh họa các bước trong quy trình kiểm thử (e.g., Lập kế hoạch, Thiết kế test case, Thực thi, Báo cáo). "
-            f"Sơ đồ phải bao gồm ít nhất 4 bước, với các liên kết thể hiện thứ tự thực hiện. "
-            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'Testing_Flow.dot' trong thư mục '{output_base_dir}/5_testing'. "
-            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
-            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_testing_flow' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_testing_flow'."
+            f"Create a Testing Flow diagram for the Test Plan to illustrate the steps in the testing process (e.g., Planning, Test Case Design, Execution, Reporting). "
+            f"The diagram must include at least 4 steps, with links showing the order of execution. "
+            f"The result is Graphviz DOT code formatting a directed diagram (digraph), saved to 'Testing_Flow.dot' in the '{output_base_dir}/5_testing' directory. "
+            f"Render the DOT file to a PNG image using the create_image function. "
+            f"Save the DOT code to SharedMemory with the key 'graphviz_testing_flow' and the PNG image path to SharedMemory with the key 'image_testing_flow'."
         ),
         agent=testing_agent,
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ luồng kiểm thử, lưu trong '{output_base_dir}/5_testing/Testing_Flow.dot' và SharedMemory với khóa 'graphviz_testing_flow'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/5_testing/Testing_Flow.png' và SharedMemory với khóa 'image_testing_flow'. "
-            f"Sơ đồ rõ ràng, có ít nhất 4 bước và các liên kết thứ tự."
+            f"Complete Graphviz DOT code illustrating the testing flow diagram, saved in '{output_base_dir}/5_testing/Testing_Flow.dot' and SharedMemory with the key 'graphviz_testing_flow'. "
+            f"The PNG image rendered from DOT, saved in '{output_base_dir}/5_testing/Testing_Flow.png' and SharedMemory with the key 'image_testing_flow'. "
+            f"The diagram is clear, has at least 4 steps and order links."
         ),
         context=[
             {
-                "description": "Thông tin từ test_plan",
-                "expected_output": "Tóm tắt kế hoạch kiểm thử để xác định các bước.",
+                "description": "Information from test_plan",
+                "expected_output": "Summary of test plan information to determine steps.",
                 "input": global_context["test_plan"]
             }
         ],

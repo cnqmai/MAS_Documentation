@@ -5,10 +5,10 @@ from utils.output_formats import create_docx, create_xlsx, create_image
 from graphviz import Digraph
 import json
 
-# --- Hàm Callback đã điều chỉnh ---
+# --- Adjusted Callback Function ---
 def make_docx_callback(title, filename, shared_memory, save_key):
     def callback(output_from_agent_object):
-        print(f"Bắt đầu tạo DOCX cho: {title}...")
+        print(f"Starting DOCX creation for: {title}...")
         content_raw_string = (
             getattr(output_from_agent_object, "result", None)
             or getattr(output_from_agent_object, "response", None)
@@ -17,20 +17,20 @@ def make_docx_callback(title, filename, shared_memory, save_key):
         )
         content_raw_string = str(content_raw_string)
         if not content_raw_string.strip():
-            print(f"⚠️  Lưu ý: Agent không trả về nội dung cho task '{title}'.")
+            print(f"⚠️  Note: Agent did not return content for task '{title}'.")
             return False
         content_paragraphs = content_raw_string.split('\n')
         docx_path = create_docx(title, content_paragraphs, filename)
         shared_memory.save(save_key, content_raw_string)
         if docx_path:
-            print(f"✅ DOCX '{filename}' đã tạo thành công và lưu vào SharedMemory '{save_key}'.")
+            print(f"✅ DOCX '{filename}' has been successfully created and saved to SharedMemory '{save_key}'.")
             return True
         else:
-            print(f"❌ Lỗi hệ thống: Không thể tạo DOCX '{filename}'.")
+            print(f"❌ System error: Unable to create DOCX '{filename}'.")
             return False
     return callback
 
-# --- Hàm tạo Task chính ---
+# --- Main Task Creation Function ---
 def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input_agent, researcher_agent, project_manager_agent, design_agent):
     tasks = []
     os.makedirs(f"{output_base_dir}/3_design", exist_ok=True)
@@ -54,41 +54,41 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 1: System Requirements Specification
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu brd:\n\n"
+            f"Below is the BRD data:\n\n"
             f"{global_context['brd']}\n\n"
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            f"Dưới đây là dữ liệu non_functional_requirements:\n\n"
+            f"Below is the non-functional requirements data:\n\n"
             f"{global_context['non_functional_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Đặc tả yêu cầu hệ thống' (System Requirements Specification - SRS) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: giới thiệu, mục đích, phạm vi, vai trò và trách nhiệm, yêu cầu hệ thống, yêu cầu chức năng, yêu cầu phần mềm/phần cứng, đặc điểm người dùng, khả năng sử dụng, môi trường vận hành, bảo mật, tuân thủ quy định, khôi phục thảm họa, thông số dữ liệu, ảnh hưởng đến mạng. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'System Requirements Specification' (SRS) document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: introduction, purpose, scope, roles and responsibilities, system requirements, functional requirements, software/hardware requirements, user characteristics, usability, operating environment, security, regulatory compliance, disaster recovery, data parameters, network impact. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'brd', 'functional_requirements', và 'non_functional_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc (), mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'brd', 'functional_requirements', and 'non_functional_requirements'. "
+            "The document is not a template, and does not contain placeholder guidelines or parentheses (), but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả brd từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu kinh doanh, mục tiêu, phạm vi...",
+                "description": "BRD information description from the user",
+                "expected_output": "Summary of business requirements, objectives, scope...",
                 "input": global_context["brd"]
             },
             {
-                "description": "Thông tin mô tả functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu chức năng, đặc điểm người dùng...",
+                "description": "Functional requirements information description from the user",
+                "expected_output": "Summary of functional requirements, user characteristics...",
                 "input": global_context["functional_requirements"]
             },
             {
-                "description": "Thông tin mô tả non_functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu phi chức năng, bảo mật, hiệu suất...",
+                "description": "Non-functional requirements information description from the user",
+                "expected_output": "Summary of non-functional requirements, security, performance...",
                 "input": global_context["non_functional_requirements"]
             }
         ],
         callback=make_docx_callback(
-            "Đặc tả yêu cầu hệ thống",
+            "System Requirements Specification",
             f"{output_base_dir}/3_design/System_Requirements_Specifications.docx",
             shared_memory,
             "srs"
@@ -98,25 +98,25 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 2: Analysis and Design Document
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu srs:\n\n"
+            f"Below is the SRS data:\n\n"
             f"{global_context['srs']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Phân tích và thiết kế' (Analysis and Design Document) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần điền nội dung thực tế cho từng mục: tổng quan hệ thống, hạ tầng, giả định thiết kế, tóm tắt thay đổi từ khởi tạo, tác động đến kinh doanh, ứng dụng, kiến trúc hiện tại và đề xuất, bảo mật và kiểm toán, thiết kế giao diện, tầng ứng dụng, thông tin triển khai, cải tiến trong tương lai, phê duyệt. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Analysis and Design Document' with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: system overview, infrastructure, design assumptions, summary of changes from initiation, business impact, application, current and proposed architecture, security and auditing, interface design, application layer, deployment information, future enhancements, approval. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'srs'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc (), mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'srs'. "
+            "The document is not a template, and does not contain placeholder guidelines or parentheses (), but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[{
-            "description": "Thông tin mô tả srs từ người dùng",
-            "expected_output": "Tóm tắt yêu cầu hệ thống, kiến trúc, bảo mật...",
+            "description": "SRS information description from the user",
+            "expected_output": "Summary of system requirements, architecture, security...",
             "input": global_context["srs"]
         }],
         callback=make_docx_callback(
-            "Phân tích và thiết kế",
+            "Analysis and Design Document",
             f"{output_base_dir}/3_design/Analysis_and_Design_Document.docx",
             shared_memory,
             "analysis_design"
@@ -126,34 +126,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 3: Application Development Project List
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu project_plan:\n\n"
+            f"Below is the project plan data:\n\n"
             f"{global_context['project_plan']}\n\n"
-            f"Dưới đây là dữ liệu wbs:\n\n"
+            f"Below is the WBS data:\n\n"
             f"{global_context['wbs']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách dự án phát triển ứng dụng' (Application Development Project List) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần điền nội dung thực tế cho từng mục: mô tả hệ thống, kiến trúc phần mềm hiện tại và đề xuất, thiết kế giao diện, các lớp ứng dụng, tác động hạ tầng, an ninh, tích hợp, triển khai, các cải tiến đề xuất, phê duyệt. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Application Development Project List' document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: system description, current and proposed software architecture, interface design, application layers, infrastructure impact, security, integration, deployment, proposed improvements, approval. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_plan' và 'wbs'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc (), mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'project_plan' and 'wbs'. "
+            "The document is not a template, and does not contain placeholder guidelines or parentheses (), but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_plan từ người dùng",
-                "expected_output": "Tóm tắt mục tiêu, mô tả hệ thống...",
+                "description": "Project plan information description from the user",
+                "expected_output": "Summary of objectives, system description...",
                 "input": global_context["project_plan"]
             },
             {
-                "description": "Thông tin mô tả wbs từ người dùng",
-                "expected_output": "Tóm tắt cấu trúc công việc, kiến trúc phần mềm...",
+                "description": "WBS information description from the user",
+                "expected_output": "Summary of work breakdown structure, software architecture...",
                 "input": global_context["wbs"]
             }
         ],
         callback=make_docx_callback(
-            "Danh sách dự án phát triển ứng dụng",
+            "Application Development Project List",
             f"{output_base_dir}/3_design/Application_Development_Project_List.docx",
             shared_memory,
             "app_dev_project_list"
@@ -163,25 +163,25 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 4: Technical Requirements Document
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu srs:\n\n"
+            f"Below is the SRS data:\n\n"
             f"{global_context['srs']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Yêu cầu kỹ thuật' (Technical Requirements Document) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mục đích, phạm vi, tài liệu tham chiếu, giả định, yêu cầu kỹ thuật cụ thể (hệ thống, mạng, cơ sở dữ liệu, giao diện người dùng, giao diện hệ thống, bảo mật). "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Technical Requirements Document' with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: purpose, scope, reference documents, assumptions, specific technical requirements (system, network, database, user interface, system interface, security). "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'srs'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'srs'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[{
-            "description": "Thông tin mô tả srs từ người dùng",
-            "expected_output": "Tóm tắt yêu cầu kỹ thuật, hệ thống, bảo mật...",
+            "description": "SRS information description from the user",
+            "expected_output": "Summary of technical requirements, system, security...",
             "input": global_context["srs"]
         }],
         callback=make_docx_callback(
-            "Yêu cầu kỹ thuật",
+            "Technical Requirements Document",
             f"{output_base_dir}/3_design/Technical_Requirements_Document.docx",
             shared_memory,
             "technical_requirements"
@@ -191,34 +191,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 5: Database Design Document
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu srs:\n\n"
+            f"Below is the SRS data:\n\n"
             f"{global_context['srs']}\n\n"
-            f"Dưới đây là dữ liệu software_architecture:\n\n"
+            f"Below is the software architecture data:\n\n"
             f"{global_context['software_architecture_plan']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Thiết kế cơ sở dữ liệu' (Database Design Document) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mục tiêu, đối tượng sử dụng, nhân sự và chủ sở hữu dữ liệu, giả định, ràng buộc, tổng quan hệ thống, kiến trúc phần cứng/phần mềm, quyết định thiết kế tổng thể, chức năng quản trị CSDL, thiết kế chi tiết (mapping dữ liệu, backup, phục hồi), yêu cầu báo cáo. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Database Design Document' with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: objectives, data users, data owner and steward, assumptions, constraints, system overview, hardware/software architecture, overall design decisions, DBMS functions, detailed design (data mapping, backup, recovery), reporting requirements. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'srs' và 'software_architecture_plan'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'srs' and 'software_architecture_plan'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả srs từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu hệ thống, dữ liệu...",
+                "description": "SRS information description from the user",
+                "expected_output": "Summary of system requirements, data...",
                 "input": global_context["srs"]
             },
             {
-                "description": "Thông tin mô tả software_architecture_plan từ người dùng",
-                "expected_output": "Tóm tắt kiến trúc phần cứng/phần mềm...",
+                "description": "Software architecture plan information description from the user",
+                "expected_output": "Summary of hardware/software architecture...",
                 "input": global_context["software_architecture_plan"]
             }
         ],
         callback=make_docx_callback(
-            "Thiết kế cơ sở dữ liệu",
+            "Database Design Document",
             f"{output_base_dir}/3_design/Database_Design_Document.docx",
             shared_memory,
             "database_design"
@@ -228,34 +228,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 6: Website Planning Checklist
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            f"Dưới đây là dữ liệu non_functional_requirements:\n\n"
+            f"Below is the non-functional requirements data:\n\n"
             f"{global_context['non_functional_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách kiểm tra lập kế hoạch website' (Website Planning Checklist) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: phân tích đối tượng, phân tích đối thủ, chiến lược nội dung, quảng bá và bảo trì, cấu trúc trang, dẫn hướng, thiết kế hình ảnh và bố cục, thiết kế giao diện người dùng, kỹ thuật kiểm thử. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Website Planning Checklist' document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: target audience analysis, competitor analysis, content strategy, promotion and maintenance, page structure, navigation, image and layout design, user interface design, testing techniques. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'functional_requirements' và 'non_functional_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'functional_requirements' and 'non_functional_requirements'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu chức năng, đối tượng, giao diện...",
+                "description": "Functional requirements information description from the user",
+                "expected_output": "Summary of functional requirements, audience, interface...",
                 "input": global_context["functional_requirements"]
             },
             {
-                "description": "Thông tin mô tả non_functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu phi chức năng, thiết kế, kiểm thử...",
+                "description": "Non-functional requirements information description from the user",
+                "expected_output": "Summary of non-functional requirements, design, testing...",
                 "input": global_context["non_functional_requirements"]
             }
         ],
         callback=make_docx_callback(
-            "Danh sách kiểm tra lập kế hoạch website",
+            "Website Planning Checklist",
             f"{output_base_dir}/3_design/Website_Planning_Checklist.docx",
             shared_memory,
             "website_planning_checklist"
@@ -265,25 +265,25 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 7: User Interface Design Template
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Mẫu thiết kế giao diện người dùng' (User Interface Design Template) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: tên sản phẩm/hệ thống, lý do thiết kế lại, chi tiết màn hình (tên, chức năng, tab, điều hướng), các thành phần (trường dữ liệu, kiểu dữ liệu, độ dài, tính toán, dropdown, font chữ, màu, kích thước, nút hành động, popup, định dạng, sự kiện), ràng buộc, rủi ro, các bên liên quan. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'User Interface Design Template' document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: product/system name, reason for redesign, screen details (name, function, tab, navigation), components (data field, data type, length, calculation, dropdown, font, color, size, action button, popup, format, event), constraints, risks, stakeholders. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'functional_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'functional_requirements'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[{
-            "description": "Thông tin mô tả functional_requirements từ người dùng",
-            "expected_output": "Tóm tắt yêu cầu chức năng, giao diện, thành phần...",
+            "description": "Functional requirements information description from the user",
+            "expected_output": "Summary of functional requirements, interface, components...",
             "input": global_context["functional_requirements"]
         }],
         callback=make_docx_callback(
-            "Mẫu thiết kế giao diện người dùng",
+            "User Interface Design Template",
             f"{output_base_dir}/3_design/User_Interface_Design_Template.docx",
             shared_memory,
             "ui_design_template"
@@ -293,25 +293,25 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 8: Report Design Template
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Mẫu thiết kế báo cáo' (Report Design Template) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: tên hệ thống, mục đích báo cáo, tần suất, quyền truy cập, giả định, ràng buộc, rủi ro, các bên liên quan, các thành phần (tham số đầu vào, tính toán, công thức, trường báo cáo, nguồn dữ liệu, nhóm dữ liệu, tiêu đề/trang, mẫu báo cáo). "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Report Design Template' document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: system name, report purpose, frequency, access rights, assumptions, constraints, risks, stakeholders, components (input parameters, calculations, formulas, report fields, data sources, data groups, title/page, report template). "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'functional_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'functional_requirements'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[{
-            "description": "Thông tin mô tả functional_requirements từ người dùng",
-            "expected_output": "Tóm tắt yêu cầu chức năng, báo cáo, nguồn dữ liệu...",
+            "description": "Functional requirements information description from the user",
+            "expected_output": "Summary of functional requirements, reports, data sources...",
             "input": global_context["functional_requirements"]
         }],
         callback=make_docx_callback(
-            "Mẫu thiết kế báo cáo",
+            "Report Design Template",
             f"{output_base_dir}/3_design/Report_Design_Template.docx",
             shared_memory,
             "report_design_template"
@@ -321,25 +321,25 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 9: Code Review Checklist
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu technical_requirements:\n\n"
+            f"Below are the technical requirements data:\n\n"
             f"{global_context['technical_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách kiểm tra đánh giá mã nguồn' (Code Review Checklist) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: cấu trúc, tài liệu, biến, kiểu dữ liệu, phong cách lập trình, cấu trúc điều khiển, vòng lặp, bảo trì, bảo mật, tính khả dụng, kiểm tra lỗi, xử lý ngoại lệ, rò rỉ tài nguyên, thời gian, thử nghiệm, xác thực. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Code Review Checklist' document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: structure, documentation, variables, data types, programming style, control structures, loops, maintenance, security, usability, error checking, exception handling, resource leaks, timing, testing, validation. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=project_manager_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'technical_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'technical_requirements'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[{
-            "description": "Thông tin mô tả technical_requirements từ người dùng",
-            "expected_output": "Tóm tắt yêu cầu kỹ thuật, bảo mật, kiểm thử...",
+            "description": "Technical requirements information description from the user",
+            "expected_output": "Summary of technical requirements, security, testing...",
             "input": global_context["technical_requirements"]
         }],
         callback=make_docx_callback(
-            "Danh sách kiểm tra đánh giá mã nguồn",
+            "Code Review Checklist",
             f"{output_base_dir}/3_design/Code_Review_Checklist.docx",
             shared_memory,
             "code_review_checklist"
@@ -349,25 +349,25 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 10: Conversion Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu srs:\n\n"
+            f"Below is the SRS data:\n\n"
             f"{global_context['srs']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch chuyển đổi' (Conversion Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mục đích, tài liệu tham khảo, mô tả hệ thống và chiến lược chuyển đổi, các loại chuyển đổi, yếu tố rủi ro, lịch trình chuyển đổi, hỗ trợ chuyển đổi (phần cứng, phần mềm, nhân lực), đảm bảo an ninh và chất lượng dữ liệu. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Conversion Plan' document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: purpose, reference documents, system description and conversion strategy, types of conversion, risk factors, conversion schedule, conversion support (hardware, software, personnel), ensuring security and data quality. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'srs'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'srs'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[{
-            "description": "Thông tin mô tả srs từ người dùng",
-            "expected_output": "Tóm tắt yêu cầu hệ thống, chiến lược chuyển đổi...",
+            "description": "SRS information description from the user",
+            "expected_output": "Summary of system requirements, conversion strategy...",
             "input": global_context["srs"]
         }],
         callback=make_docx_callback(
-            "Kế hoạch chuyển đổi",
+            "Conversion Plan",
             f"{output_base_dir}/3_design/Conversion_Plan.docx",
             shared_memory,
             "conversion_plan"
@@ -377,34 +377,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 11: System Architecture
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu software_architecture_plan:\n\n"
+            f"Below is the software architecture plan data:\n\n"
             f"{global_context['software_architecture_plan']}\n\n"
-            f"Dưới đây là dữ liệu non_functional_requirements:\n\n"
+            f"Below is the non-functional requirements data:\n\n"
             f"{global_context['non_functional_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kiến trúc hệ thống' (System Architecture) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: tổng quan kiến trúc, các thành phần hệ thống, mối quan hệ giữa các thành phần, yêu cầu hiệu suất, bảo mật, khả năng mở rộng. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'System Architecture' document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: architecture overview, system components, relationships between components, performance requirements, security, scalability. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'software_architecture_plan' và 'non_functional_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'software_architecture_plan' and 'non_functional_requirements'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả software_architecture_plan từ người dùng",
-                "expected_output": "Tóm tắt kiến trúc hệ thống, các thành phần...",
+                "description": "Software architecture plan information description from the user",
+                "expected_output": "Summary of system architecture, components...",
                 "input": global_context["software_architecture_plan"]
             },
             {
-                "description": "Thông tin mô tả non_functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu phi chức năng, hiệu suất, bảo mật...",
+                "description": "Non-functional requirements information description from the user",
+                "expected_output": "Summary of non-functional requirements, performance, security...",
                 "input": global_context["non_functional_requirements"]
             }
         ],
         callback=make_docx_callback(
-            "Kiến trúc hệ thống",
+            "System Architecture",
             f"{output_base_dir}/3_design/System_Architecture.docx",
             shared_memory,
             "system_architecture"
@@ -414,25 +414,25 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 12: Data Flow Diagrams (DFD)
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu srs:\n\n"
+            f"Below is the SRS data:\n\n"
             f"{global_context['srs']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Sơ đồ luồng dữ liệu' (Data Flow Diagrams - DFD) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: sơ đồ DFD cấp 0, các sơ đồ DFD cấp thấp hơn, mô tả các quá trình, lưu trữ dữ liệu, và luồng dữ liệu. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Data Flow Diagrams' (DFD) document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: level 0 DFD, lower-level DFDs, description of processes, data storage, and data flow. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'srs'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'srs'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[{
-            "description": "Thông tin mô tả srs từ người dùng",
-            "expected_output": "Tóm tắt yêu cầu hệ thống, luồng dữ liệu...",
+            "description": "SRS information description from the user",
+            "expected_output": "Summary of system requirements, data flow...",
             "input": global_context["srs"]
         }],
         callback=make_docx_callback(
-            "Sơ đồ luồng dữ liệu",
+            "Data Flow Diagrams",
             f"{output_base_dir}/3_design/Data_Flow_Diagrams.docx",
             shared_memory,
             "dfd"
@@ -442,34 +442,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 13: Sequence Diagrams
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            f"Dưới đây là dữ liệu use_case_template:\n\n"
+            f"Below is the use case template data:\n\n"
             f"{global_context['use_case_template']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Sơ đồ tuần tự' (Sequence Diagrams) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: sơ đồ tuần tự cho các kịch bản chính, mô tả các đối tượng, thông điệp, và trình tự tương tác. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Sequence Diagrams' document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: sequence diagram for main scenarios, description of objects, messages, and interaction sequence. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'functional_requirements' và 'use_case_template'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'functional_requirements' and 'use_case_template'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu chức năng, đối tượng tương tác...",
+                "description": "Functional requirements information description from the user",
+                "expected_output": "Summary of functional requirements, interaction objects...",
                 "input": global_context["functional_requirements"]
             },
             {
-                "description": "Thông tin mô tả use_case_template từ người dùng",
-                "expected_output": "Tóm tắt kịch bản sử dụng, trình tự tương tác...",
+                "description": "Use case template information description from the user",
+                "expected_output": "Summary of use case scenarios, interaction sequence...",
                 "input": global_context["use_case_template"]
             }
         ],
         callback=make_docx_callback(
-            "Sơ đồ tuần tự",
+            "Sequence Diagrams",
             f"{output_base_dir}/3_design/Sequence_Diagrams.docx",
             shared_memory,
             "sequence_diagrams"
@@ -479,34 +479,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 14: Security Architecture Document
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu privacy_security_requirements:\n\n"
+            f"Below are the privacy security requirements data:\n\n"
             f"{global_context['privacy_security_requirements']}\n\n"
-            f"Dưới đây là dữ liệu system_architecture:\n\n"
+            f"Below is the system architecture data:\n\n"
             f"{global_context['system_architecture']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kiến trúc bảo mật' (Security Architecture Document) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: yêu cầu bảo mật, kiến trúc bảo mật, biện pháp kiểm soát truy cập, mã hóa dữ liệu, và tuân thủ quy định. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Security Architecture Document' with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: security requirements, security architecture, access control measures, data encryption, and regulatory compliance. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'privacy_security_requirements' và 'system_architecture'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'privacy_security_requirements' and 'system_architecture'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả privacy_security_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu bảo mật, kiểm soát truy cập...",
+                "description": "Privacy security requirements information description from the user",
+                "expected_output": "Summary of security requirements, access control...",
                 "input": global_context["privacy_security_requirements"]
             },
             {
-                "description": "Thông tin mô tả system_architecture từ người dùng",
-                "expected_output": "Tóm tắt kiến trúc hệ thống, thành phần bảo mật...",
+                "description": "System architecture information description from the user",
+                "expected_output": "Summary of system architecture, security components...",
                 "input": global_context["system_architecture"]
             }
         ],
         callback=make_docx_callback(
-            "Kiến trúc bảo mật",
+            "Security Architecture Document",
             f"{output_base_dir}/3_design/Security_Architecture_Document.docx",
             shared_memory,
             "security_architecture"
@@ -516,34 +516,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 15: High-Level Design (HLD)
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu srs:\n\n"
+            f"Below is the SRS data:\n\n"
             f"{global_context['srs']}\n\n"
-            f"Dưới đây là dữ liệu software_architecture_plan:\n\n"
+            f"Below is the software architecture plan data:\n\n"
             f"{global_context['software_architecture_plan']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Thiết kế cấp cao' (High-Level Design - HLD) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: tổng quan hệ thống, các thành phần chính, mối quan hệ giữa các thành phần, kiến trúc phần mềm và phần cứng. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'High-Level Design' (HLD) document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: system overview, main components, relationships between components, software and hardware architecture. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'srs' và 'software_architecture_plan'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'srs' and 'software_architecture_plan'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả srs từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu hệ thống, tổng quan...",
+                "description": "SRS information description from the user",
+                "expected_output": "Summary of system requirements, overview...",
                 "input": global_context["srs"]
             },
             {
-                "description": "Thông tin mô tả software_architecture_plan từ người dùng",
-                "expected_output": "Tóm tắt kiến trúc phần mềm, thành phần chính...",
+                "description": "Software architecture plan information description from the user",
+                "expected_output": "Summary of software architecture, main components...",
                 "input": global_context["software_architecture_plan"]
             }
         ],
         callback=make_docx_callback(
-            "Thiết kế cấp cao",
+            "High-Level Design",
             f"{output_base_dir}/3_design/High_Level_Design.docx",
             shared_memory,
             "hld"
@@ -553,34 +553,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 16: Low-Level Design (LLD)
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu hld:\n\n"
+            f"Below is the HLD data:\n\n"
             f"{global_context['hld']}\n\n"
-            f"Dưới đây là dữ liệu technical_requirements:\n\n"
+            f"Below are the technical requirements data:\n\n"
             f"{global_context['technical_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Thiết kế cấp thấp' (Low-Level Design - LLD) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mô tả chi tiết các module, giao diện, thuật toán, cấu trúc dữ liệu. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'Low-Level Design' (LLD) document with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: detailed description of modules, interfaces, algorithms, data structures. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'hld' và 'technical_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'hld' and 'technical_requirements'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả hld từ người dùng",
-                "expected_output": "Tóm tắt thiết kế cấp cao, module...",
+                "description": "HLD information description from the user",
+                "expected_output": "Summary of high-level design, modules...",
                 "input": global_context["hld"]
             },
             {
-                "description": "Thông tin mô tả technical_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu kỹ thuật, thuật toán, cấu trúc dữ liệu...",
+                "description": "Technical requirements information description from the user",
+                "expected_output": "Summary of technical requirements, algorithms, data structures...",
                 "input": global_context["technical_requirements"]
             }
         ],
         callback=make_docx_callback(
-            "Thiết kế cấp thấp",
+            "Low-Level Design",
             f"{output_base_dir}/3_design/Low_Level_Design.docx",
             shared_memory,
             "lld"
@@ -590,34 +590,34 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # Task 17: API Design Document
     tasks.append(Task(
         description=(
-            f"Dưới đây là dữ liệu functional_requirements:\n\n"
+            f"Below is the functional requirements data:\n\n"
             f"{global_context['functional_requirements']}\n\n"
-            f"Dưới đây là dữ liệu technical_requirements:\n\n"
+            f"Below are the technical requirements data:\n\n"
             f"{global_context['technical_requirements']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Thiết kế API' (API Design Document) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, cần nội dung thực tế cho từng mục: mô tả API, endpoint, phương thức, tham số, phản hồi, và bảo mật. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Please use the above data to write the 'API Design Document' with complete, specific content, leaving no section empty. "
+            "Do not create a template or guidelines; instead, fill in the actual content for each section: API description, endpoint, method, parameters, response, and security. "
+            "If data is missing, please infer or make reasonable assumptions instead of leaving it blank."
         ),
         agent=design_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'functional_requirements' và 'technical_requirements'. "
-            "Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-            "Sẵn sàng để chuyển sang file DOCX."
+            "A complete document with content fully filled based on the actual data in 'functional_requirements' and 'technical_requirements'. "
+            "The document is not a template, and does not contain placeholder guidelines or brackets [], but rather specific and clear content. "
+            "Ready to be converted to DOCX file."
         ),
         context=[
             {
-                "description": "Thông tin mô tả functional_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu chức năng, mô tả API...",
+                "description": "Functional requirements information description from the user",
+                "expected_output": "Summary of functional requirements, API description...",
                 "input": global_context["functional_requirements"]
             },
             {
-                "description": "Thông tin mô tả technical_requirements từ người dùng",
-                "expected_output": "Tóm tắt yêu cầu kỹ thuật, bảo mật, endpoint...",
+                "description": "Technical requirements information description from the user",
+                "expected_output": "Summary of technical requirements, security, endpoint...",
                 "input": global_context["technical_requirements"]
             }
         ],
         callback=make_docx_callback(
-            "Thiết kế API",
+            "API Design Document",
             f"{output_base_dir}/3_design/API_Design_Document.docx",
             shared_memory,
             "api_design"
@@ -628,24 +628,24 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # New Task: System Architecture Diagram for System Architecture (Graphviz)
     tasks.append(Task(
         description=(
-            f"Dựa trên dữ liệu system_requirements:\n\n"
+            f"Based on the system requirements data:\n\n"
             f"system_requirements:\n{global_context['system_requirements']}\n\n"
-            f"Tạo một sơ đồ kiến trúc hệ thống (System Architecture Diagram) cho System Architecture để minh họa các thành phần chính của hệ thống (e.g., Frontend, Backend, Database, API Gateway). "
-            f"Sơ đồ phải bao gồm ít nhất 4 thành phần và các liên kết thể hiện luồng tương tác giữa chúng. "
-            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'System_Architecture_Diagram.dot' trong thư mục '{output_base_dir}/4_design'. "
-            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
-            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_system_architecture' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_system_architecture'."
+            f"Create a system architecture diagram for System Architecture to illustrate the main components of the system (e.g., Frontend, Backend, Database, API Gateway). "
+            f"The diagram must include at least 4 components and links showing the interaction flow between them. "
+            f"The result is Graphviz DOT code formatting a directed diagram (digraph), saved to the file 'System_Architecture_Diagram.dot' in the folder '{output_base_dir}/4_design'. "
+            f"Render the DOT file to a PNG image using the create_image function. "
+            f"Save the DOT code to SharedMemory with the key 'graphviz_system_architecture' and the PNG image path to SharedMemory with the key 'image_system_architecture'."
         ),
         agent=design_agent,
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ kiến trúc hệ thống, lưu trong '{output_base_dir}/3_design/System_Architecture_Diagram.dot' và SharedMemory với khóa 'graphviz_system_architecture'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/3_design/System_Architecture_Diagram.png' và SharedMemory với khóa 'image_system_architecture'. "
-            f"Sơ đồ rõ ràng, có ít nhất 4 thành phần và các liên kết tương tác."
+            f"Complete Graphviz DOT code illustrating the system architecture diagram, saved in '{output_base_dir}/3_design/System_Architecture_Diagram.dot' and SharedMemory with the key 'graphviz_system_architecture'. "
+            f"The PNG image rendered from DOT, saved in '{output_base_dir}/3_design/System_Architecture_Diagram.png' and SharedMemory with the key 'image_system_architecture'. "
+            f"The diagram is clear, with at least 4 components and interaction links."
         ),
         context=[
             {
-                "description": "Thông tin từ system_requirements",
-                "expected_output": "Tóm tắt yêu cầu hệ thống để xác định các thành phần kiến trúc.",
+                "description": "Information from system_requirements",
+                "expected_output": "Summary of system requirements to identify architecture components.",
                 "input": global_context["system_requirements"]
             }
         ],
@@ -659,24 +659,24 @@ def create_design_tasks(shared_memory: SharedMemory, output_base_dir: str, input
     # New Task: Wireframe for User Interface Design Template (Graphviz)
     tasks.append(Task(
         description=(
-            f"Dựa trên dữ liệu functional_requirements:\n\n"
+            f"Based on the functional requirements data:\n\n"
             f"functional_requirements:\n{global_context['functional_requirements']}\n\n"
-            f"Tạo một wireframe mẫu cho User Interface Design Template để minh họa bố cục giao diện người dùng (e.g., Header, Sidebar, Content Area, Footer). "
-            f"Wireframe phải bao gồm ít nhất 4 thành phần giao diện và các liên kết thể hiện cách điều hướng. "
-            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'UI_Wireframe.dot' trong thư mục '{output_base_dir}/4_design'. "
-            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
-            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_ui_wireframe' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_ui_wireframe'."
+            f"Create a wireframe template for User Interface Design Template to illustrate the user interface layout (e.g., Header, Sidebar, Content Area, Footer). "
+            f"The wireframe must include at least 4 interface components and links showing the navigation flow. "
+            f"The result is Graphviz DOT code formatting a directed diagram (digraph), saved to the file 'UI_Wireframe.dot' in the folder '{output_base_dir}/4_design'. "
+            f"Render the DOT file to a PNG image using the create_image function. "
+            f"Save the DOT code to SharedMemory with the key 'graphviz_ui_wireframe' and the PNG image path to SharedMemory with the key 'image_ui_wireframe'."
         ),
         agent=design_agent,
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa wireframe giao diện người dùng, lưu trong '{output_base_dir}/3_design/UI_Wireframe.dot' và SharedMemory với khóa 'graphviz_ui_wireframe'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/3_design/UI_Wireframe.png' và SharedMemory với khóa 'image_ui_wireframe'. "
-            f"Sơ đồ rõ ràng, có ít nhất 4 thành phần giao diện và luồng điều hướng."
+            f"Complete Graphviz DOT code illustrating the user interface wireframe, saved in '{output_base_dir}/3_design/UI_Wireframe.dot' and SharedMemory with the key 'graphviz_ui_wireframe'. "
+            f"The PNG image rendered from DOT, saved in '{output_base_dir}/3_design/UI_Wireframe.png' and SharedMemory with the key 'image_ui_wireframe'. "
+            f"The diagram is clear, with at least 4 interface components and navigation flow."
         ),
         context=[
             {
-                "description": "Thông tin từ functional_requirements",
-                "expected_output": "Tóm tắt yêu cầu chức năng để xác định bố cục giao diện.",
+                "description": "Information from functional_requirements",
+                "expected_output": "Summary of functional requirements to identify interface layout.",
                 "input": global_context["functional_requirements"]
             }
         ],

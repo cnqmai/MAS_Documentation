@@ -9,42 +9,42 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def create_initial_requirement_collection_task(input_agent, existing_context: str):
     return Task(
         description=(
-            f"Bạn là một chuyên gia thu thập yêu cầu. Nhiệm vụ của bạn là đặt các câu hỏi rõ ràng, cụ thể "
-            f"cho người dùng để làm rõ các yêu cầu ban đầu cho một hệ thống phần mềm.\n\n"
-            f"**QUY TẮC:**\n"
-            f"1. Chỉ hỏi MỘT câu mỗi lần.\n"
-            f"2. Nếu đã đủ thông tin, bắt đầu output bằng 'KẾT THÚC_TÓM TẮT:' và viết bản tóm tắt.\n"
-            f"3. Hỏi các khía cạnh như: mục tiêu, tính năng, người dùng, ràng buộc kỹ thuật, công nghệ ưa thích, v.v.\n"
-            f"--- Ngữ cảnh hội thoại ---\n"
+            f"You are a requirements elicitation expert. Your task is to ask clear, specific questions "
+            f"to the user to clarify the initial requirements for a software system.\n\n"
+            f"**RULES:**\n"
+            f"1. Ask ONLY ONE question at a time.\n"
+            f"2. If you have enough information, start your output with 'END_SUMMARY:' and write a summary.\n"
+            f"3. Ask about aspects such as: goals, features, users, technical constraints, preferred technologies, etc.\n"
+            f"--- Conversation context ---\n"
             f"{existing_context}\n\n"
-            f"Câu hỏi tiếp theo hoặc Bản tóm tắt:"
+            f"Next question or Summary:"
         ),
-        expected_output="Một câu hỏi duy nhất hoặc bản tóm tắt bắt đầu bằng 'KẾT THÚC_TÓM TẮT:'.",
+        expected_output="A single question or a summary starting with 'END_SUMMARY:'.",
         agent=input_agent,
         verbose=False
     )
 
 def run_input_collection_conversation(input_agent, summary_output_dir: str, shared_memory: SharedMemory):
-    logging.info("--- Bắt đầu thu thập yêu cầu hệ thống từ người dùng (tương tác) ---")
+    logging.info("--- Starting system requirements elicitation from user (interactive) ---")
 
     os.makedirs(summary_output_dir, exist_ok=True)
 
-    initial_prompt = "Chào mừng bạn! Bạn hãy mô tả ý tưởng hoặc mục tiêu chính của hệ thống phần mềm bạn muốn xây dựng."
-    print(f"\nAGENT HỎI: {initial_prompt}")
-    print(" (Gợi ý: Nếu bạn muốn kết thúc và yêu cầu tóm tắt, hãy gõ 'TÓM TẮT' và nhấn Enter.)")
-    user_input = input("BẠN TRẢ LỜI: ")
+    initial_prompt = "Welcome! Please describe the main idea or goal of the software system you want to build."
+    print(f"\nAGENT ASKS: {initial_prompt}")
+    print(" (Tip: If you want to finish and request a summary, type 'SUMMARY' and press Enter.)")
+    user_input = input("YOUR ANSWER: ")
 
     conversation_history = [
-        f"\nAGENT HỎI: {initial_prompt}\n",
-        f"BẠN TRẢ LỜI: {user_input}\n"
+        f"\nAGENT ASKS: {initial_prompt}\n",
+        f"YOUR ANSWER: {user_input}\n"
     ]
-    current_context = f"Người dùng đã trả lời: {user_input}"
+    current_context = f"The user answered: {user_input}"
     user_requested_summary = False
 
     while True:
         task_context = "".join(conversation_history) + f"AGENT: {current_context}"
         if user_requested_summary:
-            task_context += "\n\nNgười dùng đã yêu cầu tóm tắt. Bắt đầu câu trả lời bằng 'KẾT THÚC_TÓM TẮT:' và tóm tắt toàn bộ yêu cầu đã thu thập."
+            task_context += "\n\nThe user has requested a summary. Start your answer with 'END_SUMMARY:' and summarize all collected requirements."
 
         task = create_initial_requirement_collection_task(input_agent, task_context)
         crew = Crew(agents=[input_agent], tasks=[task], process=Process.sequential, verbose=False)
@@ -53,50 +53,50 @@ def run_input_collection_conversation(input_agent, summary_output_dir: str, shar
             result = crew.kickoff()
             agent_output = str(result).strip()
 
-            if agent_output.startswith("KẾT THÚC_TÓM TẮT:"):
-                final_summary = agent_output.replace("KẾT THÚC_TÓM TẮT:", "").strip()
+            if agent_output.startswith("END_SUMMARY:"):
+                final_summary = agent_output.replace("END_SUMMARY:", "").strip()
 
                 print("\n" + "="*80)
-                print("        BẢN TÓM TẮT YÊU CẦU HỆ THỐNG (SYSTEM REQUEST SUMMARY)        ")
+                print("        SYSTEM REQUIREMENTS SUMMARY        ")
                 print("="*80)
                 print(final_summary)
                 print("="*80 + "\n")
 
-                # ✅ Lưu vào bộ nhớ
+                # ✅ Save to memory
                 shared_memory.save("system_request_summary", final_summary)
 
-                # ✅ Lưu file Markdown
+                # ✅ Save Markdown file
                 summary_path = os.path.join(summary_output_dir, "System_Request_Summary.md")
                 create_md(final_summary, summary_path)
 
-                history_md = "# Lịch sử hội thoại thu thập yêu cầu ban đầu\n\n" + \
+                history_md = "# Initial Requirements Elicitation Conversation History\n\n" + \
                              "".join(conversation_history) + \
-                             f"\n\n## Bản tóm tắt cuối cùng:\n{final_summary}\n"
+                             f"\n\n## Final Summary:\n{final_summary}\n"
                 history_path = os.path.join(summary_output_dir, "Conversation_History.md")
                 create_md(history_md, history_path)
 
-                logging.info(f"✅ Đã lưu {summary_path} và {history_path}")
+                logging.info(f"✅ Saved {summary_path} and {history_path}")
                 break
 
             else:
-                print(f"\nAGENT HỎI: {agent_output}")
-                print(" (Gợi ý: Gõ 'TÓM TẮT' nếu bạn muốn kết thúc và tạo bản tóm tắt.)")
+                print(f"\nAGENT ASKS: {agent_output}")
+                print(" (Tip: Type 'SUMMARY' if you want to finish and get a summary.)")
 
-                conversation_history.append(f"\nAGENT HỎI: {agent_output}\n")
-                user_response = input("BẠN TRẢ LỜI: ")
+                conversation_history.append(f"\nAGENT ASKS: {agent_output}\n")
+                user_response = input("YOUR ANSWER: ")
 
-                if user_response.strip().upper() == "TÓM TẮT":
+                if user_response.strip().upper() == "SUMMARY":
                     user_requested_summary = True
-                    current_context = "Người dùng đã yêu cầu tóm tắt các yêu cầu đã thu thập."
-                    conversation_history.append("BẠN TRẢ LỜI: TÓM TẮT\n")
+                    current_context = "The user has requested a summary of the collected requirements."
+                    conversation_history.append("YOUR ANSWER: SUMMARY\n")
                     continue
 
-                conversation_history.append(f"BẠN TRẢ LỜI: {user_response}\n")
-                current_context = f"Người dùng đã trả lời: {user_response}"
+                conversation_history.append(f"YOUR ANSWER: {user_response}\n")
+                current_context = f"The user answered: {user_response}"
 
         except Exception as e:
-            logging.error(f"❌ Lỗi khi thu thập yêu cầu: {e}", exc_info=True)
-            print("⚠️ Đã xảy ra lỗi trong quá trình thu thập yêu cầu.")
+            logging.error(f"❌ Error during requirements elicitation: {e}", exc_info=True)
+            print("⚠️ An error occurred during requirements elicitation.")
             break
 
-    logging.info("--- Kết thúc quá trình thu thập yêu cầu ---")
+    logging.info("--- Finished requirements elicitation process ---")

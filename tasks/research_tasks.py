@@ -4,10 +4,10 @@ from memory.shared_memory import SharedMemory
 from utils.output_formats import create_docx
 from utils.phase_outputs import phase_outputs
 
-# --- Hàm Callback cho DOCX ---
+# --- DOCX Callback Function ---
 def make_docx_callback(title, filename, shared_memory, save_key):
     def callback(output_from_agent_object):
-        print(f"Bắt đầu tạo DOCX cho: {title}...")
+        print(f"Starting DOCX creation for: {title}...")
         content_raw_string = (
             getattr(output_from_agent_object, "result", None)
             or getattr(output_from_agent_object, "response", None)
@@ -16,20 +16,20 @@ def make_docx_callback(title, filename, shared_memory, save_key):
         )
         content_raw_string = str(content_raw_string)
         if not content_raw_string.strip():
-            print(f"⚠️  Lưu ý: Agent không trả về nội dung cho task '{title}'.")
+            print(f"⚠️  Note: Agent did not return content for task '{title}'.")
             return False
         content_paragraphs = content_raw_string.split('\n')
         docx_path = create_docx(title, content_paragraphs, filename)
         shared_memory.save(save_key, content_raw_string)
         if docx_path:
-            print(f"✅ DOCX '{filename}' đã tạo thành công và lưu vào SharedMemory '{save_key}'.")
+            print(f"✅ DOCX '{filename}' created successfully and saved to SharedMemory '{save_key}'.")
             return True
         else:
-            print(f"❌ Lỗi hệ thống: Không thể tạo DOCX '{filename}'.")
+            print(f"❌ System error: Unable to create DOCX '{filename}'.")
             return False
     return callback
 
-# --- Hàm tạo Task chính ---
+# --- Main Task Creation Function ---
 def create_research_tasks(shared_memory: SharedMemory, output_base_dir: str, researcher_agent):
     tasks = []
 
@@ -39,24 +39,24 @@ def create_research_tasks(shared_memory: SharedMemory, output_base_dir: str, res
 
         tasks.append(Task(
             description=(
-                f"Nghiên cứu các phương pháp tốt nhất (Best Practices) cho giai đoạn {phase_name} dựa trên tiêu chuẩn ngành (PMBOK, Agile, IEEE, hoặc các nguồn đáng tin cậy) để tối ưu hóa quy trình và tài liệu của giai đoạn này. "
-                f"Tập trung đặc biệt vào các giai đoạn Initiation, Planning, và Requirements (nếu áp dụng), với các ví dụ cụ thể về cách áp dụng các phương pháp này vào các tài liệu như {', '.join(output_docs)}. "
-                f"Tài liệu phải bao gồm nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào: giới thiệu, mục đích, danh sách phương pháp tốt nhất, ví dụ áp dụng, lợi ích, tài liệu tham khảo. "
-                f"Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+                f"Research best practices for the {phase_name} phase based on industry standards (PMBOK, Agile, IEEE, or reputable sources) to optimize the process and documentation of this phase. "
+                f"Pay special attention to the Initiation, Planning, and Requirements phases (if applicable), with specific examples of how to apply these practices to documents such as {', '.join(output_docs)}. "
+                f"The document must include complete and specific content, leaving no section blank: introduction, purpose, list of best practices, application examples, benefits, references. "
+                f"If data is missing, infer or make reasonable assumptions instead of leaving blank."
             ),
             agent=researcher_agent,
             expected_output=(
-                f"Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên nghiên cứu tiêu chuẩn ngành (PMBOK, Agile, IEEE). "
-                f"Tài liệu không phải là template mẫu, không có hướng dẫn placeholder hay dấu ngoặc [], mà là nội dung cụ thể rõ ràng. "
-                f"Sẵn sàng để chuyển sang file DOCX cho giai đoạn {phase_name}."
+                f"A complete document, fully filled out based on research of industry standards (PMBOK, Agile, IEEE). "
+                f"The document is not a template, does not contain placeholders or [], but is specific and clear content. "
+                f"Ready to be exported to DOCX for the {phase_name} phase."
             ),
             context=[{
-                "description": f"Thông tin về các tài liệu đầu ra của giai đoạn {phase_name}",
-                "expected_output": f"Tóm tắt các tài liệu như {', '.join(output_docs)} để áp dụng phương pháp tốt nhất.",
-                "input": f"Danh sách tài liệu: {', '.join(output_docs)}"
+                "description": f"Information about the output documents of the {phase_name} phase",
+                "expected_output": f"Summarize documents such as {', '.join(output_docs)} to apply best practices.",
+                "input": f"Document list: {', '.join(output_docs)}"
             }],
             callback=make_docx_callback(
-                f"Phương pháp tốt nhất - {phase_name}",
+                f"Best Practices - {phase_name}",
                 os.path.join(output_base_dir, phase_dir, f"Best_Practice_{phase_name}.docx"),
                 shared_memory,
                 f"best_practices_{phase_dir}"

@@ -5,10 +5,10 @@ from utils.output_formats import create_docx, create_xlsx, create_image
 from memory.shared_memory import SharedMemory
 from graphviz import Digraph
 
-# --- Các hàm Callback đã điều chỉnh ---
+# --- Adjusted Callback Functions ---
 def make_docx_callback(title, filename, shared_memory, save_key):
     def callback(output_from_agent_object):
-        print(f"Bắt đầu tạo DOCX cho: {title}...")
+        print(f"Starting DOCX creation for: {title}...")
         content_raw_string = (
             getattr(output_from_agent_object, "result", None)
             or getattr(output_from_agent_object, "response", None)
@@ -17,22 +17,22 @@ def make_docx_callback(title, filename, shared_memory, save_key):
         )
         content_raw_string = str(content_raw_string)
         if not content_raw_string.strip():
-            print(f"⚠️  Lưu ý: Agent không trả về nội dung cho task '{title}'.")
+            print(f"⚠️  Note: Agent did not return content for task '{title}'.")
             return False
         content_paragraphs = content_raw_string.split('\n')
         docx_path = create_docx(title, content_paragraphs, filename)
         shared_memory.save(save_key, content_raw_string)
         if docx_path:
-            print(f"✅ DOCX '{filename}' đã tạo thành công và lưu vào SharedMemory '{save_key}'.")
+            print(f"✅ DOCX '{filename}' created successfully and saved to SharedMemory '{save_key}'.")
             return True
         else:
-            print(f"❌ Lỗi: Không thể tạo DOCX '{filename}'.")
+            print(f"❌ Error: Unable to create DOCX '{filename}'.")
             return False
     return callback
 
 def make_docx_xlsx_callback(title, docx_filename, xlsx_filename, shared_memory, save_key):
     def callback(output_from_agent_object): 
-        print(f"🚀 Bắt đầu tạo DOCX và XLSX cho: {title}...")
+        print(f"🚀 Starting DOCX and XLSX creation for: {title}...")
         try:
             raw_output_json_string = (
                 getattr(output_from_agent_object, "result", None)
@@ -42,7 +42,7 @@ def make_docx_xlsx_callback(title, docx_filename, xlsx_filename, shared_memory, 
             )
             raw_output_json_string = str(raw_output_json_string)
             if not raw_output_json_string.strip():
-                print(f"⚠️ Agent không trả về dữ liệu JSON cho task '{title}'.")
+                print(f"⚠️ Agent did not return JSON data for task '{title}'.")
                 return False
             parsed_output = json.loads(raw_output_json_string)
             docx_content_raw = parsed_output.get("docx_content", "")
@@ -52,17 +52,17 @@ def make_docx_xlsx_callback(title, docx_filename, xlsx_filename, shared_memory, 
             xlsx_path = create_xlsx(xlsx_data_raw, xlsx_filename)
             shared_memory.save(save_key, raw_output_json_string)
             if docx_path and xlsx_path:
-                print(f"✅ DOCX '{docx_filename}' và XLSX '{xlsx_filename}' đã được tạo và lưu thành công.")
+                print(f"✅ DOCX '{docx_filename}' and XLSX '{xlsx_filename}' created and saved successfully.")
                 return True
             else:
-                print(f"❌ Lỗi khi tạo file DOCX hoặc XLSX cho task '{title}'.")
+                print(f"❌ Error creating DOCX or XLSX for task '{title}'.")
                 return False
         except json.JSONDecodeError as e:
-            print(f"❌ Lỗi JSON: Không thể phân tích nội dung agent cho '{title}': {e}")
-            print(f"🪵 Output nhận được: {raw_output_json_string[:500]}...")
+            print(f"❌ JSON Error: Unable to parse agent output for '{title}': {e}")
+            print(f"🪵 Output received: {raw_output_json_string[:500]}...")
             return False
         except Exception as e:
-            print(f"❌ Lỗi không xác định khi xử lý callback cho '{title}': {e}")
+            print(f"❌ Unknown error processing callback for '{title}': {e}")
             return False
     return callback
 
@@ -88,24 +88,24 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # PMO Checklist
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_charter:\n\n"
+            f"Below is the project_charter information:\n\n"
             f"{global_context['project_charter']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách kiểm tra PMO' (Project Management Office Checklist) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục tiêu, đối tượng, trách nhiệm tổ chức, bộ công cụ PMO, dữ liệu cần thiết, giao diện hỗ trợ. "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write a complete 'Project Management Office Checklist' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: objectives, audience, organizational responsibilities, PMO toolkit, required data, support interface. "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_charter'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả project_charter từ người dùng",
-            "expected_output": "Tóm tắt thông tin về mục tiêu, vai trò, công cụ, dữ liệu PMO...",
+            "description": "User-provided project_charter information",
+            "expected_output": "Summary of objectives, roles, tools, PMO data...",
             "input": global_context["project_charter"]
         }],
         callback=make_docx_callback(
-            "Danh sách kiểm tra PMO",
+            "Project Management Office Checklist",
             f"{output_base_dir}/1_planning/PMO_Checklist.docx",
             shared_memory,
             "pmo_checklist"
@@ -115,33 +115,33 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Statement of Work
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_charter:\n\n"
+            f"Below is the project_charter information:\n\n"
             f"{global_context['project_charter']}\n\n"
-            f"Dưới đây là thông tin business_case:\n\n"
+            f"Below is the business_case information:\n\n"
             f"{global_context['business_case']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Tuyên bố công việc' (Statement of Work) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục tiêu kinh doanh, mô tả dự án, ước lượng tiến độ, chi phí, nguồn lực, kiểm soát dự án (rủi ro, vấn đề, thay đổi). "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write a complete 'Statement of Work' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: business objectives, project description, schedule estimate, cost, resources, project control (risks, issues, changes). "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter' và 'business_case'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_charter' and 'business_case'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_charter từ người dùng",
-                "expected_output": "Tóm tắt thông tin về phạm vi, sản phẩm đầu ra, tiến độ...",
+                "description": "User-provided project_charter information",
+                "expected_output": "Summary of scope, deliverables, schedule...",
                 "input": global_context["project_charter"]
             },
             {
-                "description": "Thông tin mô tả business_case từ người dùng",
-                "expected_output": "Tóm tắt mục tiêu kinh doanh, lợi ích, chi phí...",
+                "description": "User-provided business_case information",
+                "expected_output": "Summary of business objectives, benefits, costs...",
                 "input": global_context["business_case"]
             }
         ],
         callback=make_docx_callback(
-            "Tuyên bố công việc",
+            "Statement of Work",
             f"{output_base_dir}/1_planning/Statement_of_Work.docx",
             shared_memory,
             "statement_of_work"
@@ -151,33 +151,33 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Project Approval Document
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_charter:\n\n"
+            f"Below is the project_charter information:\n\n"
             f"{global_context['project_charter']}\n\n"
-            f"Dưới đây là thông tin business_case:\n\n"
+            f"Below is the business_case information:\n\n"
             f"{global_context['business_case']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Phê duyệt dự án' (Project Approval Document) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: tổng quan, mô tả dự án, thông tin phê duyệt (người phụ trách, chữ ký, ngày tháng). "
-            "Nếu thiếu dữ liệu, hãy suy luận hoặc đưa ra giả định hợp lý thay vì để trống."
+            "Use the above data to write a complete 'Project Approval Document' with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: overview, project description, approval information (responsible person, signature, date). "
+            "If data is missing, infer or make reasonable assumptions instead of leaving blank."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter' và 'business_case'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_charter' and 'business_case'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_charter từ người dùng",
-                "expected_output": "Tóm tắt tổng quan dự án, phạm vi, mục tiêu...",
+                "description": "User-provided project_charter information",
+                "expected_output": "Summary of project overview, scope, objectives...",
                 "input": global_context["project_charter"]
             },
             {
-                "description": "Thông tin mô tả business_case từ người dùng",
-                "expected_output": "Tóm tắt mục tiêu, lợi ích, phê duyệt...",
+                "description": "User-provided business_case information",
+                "expected_output": "Summary of objectives, benefits, approval...",
                 "input": global_context["business_case"]
             }
         ],
         callback=make_docx_callback(
-            "Phê duyệt dự án",
+            "Project Approval Document",
             f"{output_base_dir}/1_planning/Project_Approval_Document.docx",
             shared_memory,
             "project_approval"
@@ -187,23 +187,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Cost Estimating Worksheet
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin cost_benefit_analysis:\n\n"
+            f"Below is the cost_benefit_analysis information:\n\n"
             f"{global_context['cost_benefit_analysis']}\n\n"
-            "Hãy sử dụng dữ liệu trên để tạo bảng tính 'Ước lượng chi phí' (Cost Estimating Worksheet) với nội dung cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: nhân lực CNTT, dịch vụ chuyên nghiệp, phần cứng, phần mềm, chi phí khác, tổng chi phí, dự phòng rủi ro."
+            "Use the above data to create a 'Cost Estimating Worksheet' spreadsheet with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: IT personnel, professional services, hardware, software, other costs, total cost, risk reserve."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một bảng tính hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'cost_benefit_analysis'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file XLSX."
+            "A complete spreadsheet, fully filled out based on actual data in 'cost_benefit_analysis'. "
+            "Not a template, no placeholders or brackets (). Ready to export to XLSX."
         ),
         context=[{
-            "description": "Thông tin mô tả cost_benefit_analysis từ người dùng",
-            "expected_output": "Tóm tắt các hạng mục chi phí, dự phòng rủi ro...",
+            "description": "User-provided cost_benefit_analysis information",
+            "expected_output": "Summary of cost items, risk reserve...",
             "input": global_context["cost_benefit_analysis"]
         }],
         callback=make_docx_xlsx_callback(
-            "Ước lượng chi phí",
+            "Cost Estimating Worksheet",
             f"{output_base_dir}/1_planning/Cost_Estimating_Worksheet.docx",
             f"{output_base_dir}/1_planning/Cost_Estimating_Worksheet.xlsx",
             shared_memory,
@@ -214,23 +214,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Development Estimating Worksheet
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin cost_benefit_analysis:\n\n"
+            f"Below is the cost_benefit_analysis information:\n\n"
             f"{global_context['cost_benefit_analysis']}\n\n"
-            "Hãy sử dụng dữ liệu trên để tạo bảng tính 'Ước lượng phát triển' (Development Estimating Worksheet) với nội dung cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: nguyên mẫu, giao diện người dùng, báo cáo, cơ sở dữ liệu, tích hợp, máy chủ, tổng hợp chi phí phát triển, phần mềm, hỗ trợ dài hạn."
+            "Use the above data to create a 'Development Estimating Worksheet' spreadsheet with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: prototyping, user interface, reports, database, integration, servers, total development cost, software, long-term support."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một bảng tính hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'cost_benefit_analysis'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file XLSX."
+            "A complete spreadsheet, fully filled out based on actual data in 'cost_benefit_analysis'. "
+            "Not a template, no placeholders or brackets (). Ready to export to XLSX."
         ),
         context=[{
-            "description": "Thông tin mô tả cost_benefit_analysis từ người dùng",
-            "expected_output": "Tóm tắt các hạng mục chi phí phát triển...",
+            "description": "User-provided cost_benefit_analysis information",
+            "expected_output": "Summary of development cost items...",
             "input": global_context["cost_benefit_analysis"]
         }],
         callback=make_docx_xlsx_callback(
-            "Ước lượng phát triển",
+            "Development Estimating Worksheet",
             f"{output_base_dir}/1_planning/Development_Estimating_Worksheet.docx",
             f"{output_base_dir}/1_planning/Development_Estimating_Worksheet.xlsx",
             shared_memory,
@@ -241,23 +241,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Capital vs. Expense Costs
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin cost_benefit_analysis:\n\n"
+            f"Below is the cost_benefit_analysis information:\n\n"
             f"{global_context['cost_benefit_analysis']}\n\n"
-            "Hãy sử dụng dữ liệu trên để tạo bảng tính 'Chi phí vốn so với chi phí vận hành' (Project Capital vs. Expense Costs) với nội dung cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: phần cứng, phần mềm, dịch vụ, di chuyển, tổng hợp chi phí vốn và vận hành."
+            "Use the above data to create a 'Project Capital vs. Expense Costs' spreadsheet with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: hardware, software, services, migration, total capital and operating costs."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một bảng tính hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'cost_benefit_analysis'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file XLSX."
+            "A complete spreadsheet, fully filled out based on actual data in 'cost_benefit_analysis'. "
+            "Not a template, no placeholders or brackets (). Ready to export to XLSX."
         ),
         context=[{
-            "description": "Thông tin mô tả cost_benefit_analysis từ người dùng",
-            "expected_output": "Tóm tắt các hạng mục chi phí vốn và vận hành...",
+            "description": "User-provided cost_benefit_analysis information",
+            "expected_output": "Summary of capital and operating cost items...",
             "input": global_context["cost_benefit_analysis"]
         }],
         callback=make_docx_xlsx_callback(
-            "Chi phí vốn vs vận hành",
+            "Capital vs Operating Costs",
             f"{output_base_dir}/1_planning/Project_Capital_vs_Expense_Costs.docx",
             f"{output_base_dir}/1_planning/Project_Capital_vs_Expense_Costs.xlsx",
             shared_memory,
@@ -268,32 +268,32 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Configuration Management Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_charter:\n\n"
+            f"Below is the project_charter information:\n\n"
             f"{global_context['project_charter']}\n\n"
-            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"Below is the statement_of_work information:\n\n"
             f"{global_context['statement_of_work']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch quản lý cấu hình' (Configuration Management Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: đối tượng người dùng, tổ chức quản lý cấu hình, hoạt động & trách nhiệm, hội đồng kiểm soát cấu hình (CCB), kiểm toán cấu hình, phê duyệt kế hoạch."
+            "Use the above data to write a complete 'Configuration Management Plan' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: user audience, configuration management organization, activities & responsibilities, configuration control board (CCB), configuration audit, plan approval."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter' và 'statement_of_work'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_charter' and 'statement_of_work'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_charter từ người dùng",
-                "expected_output": "Tóm tắt thông tin về tổ chức, vai trò, trách nhiệm...",
+                "description": "User-provided project_charter information",
+                "expected_output": "Summary of organization, roles, responsibilities...",
                 "input": global_context["project_charter"]
             },
             {
-                "description": "Thông tin mô tả statement_of_work từ người dùng",
-                "expected_output": "Tóm tắt thông tin về phạm vi, hoạt động, kiểm soát...",
+                "description": "User-provided statement_of_work information",
+                "expected_output": "Summary of scope, activities, control...",
                 "input": global_context["statement_of_work"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch quản lý cấu hình",
+            "Configuration Management Plan",
             f"{output_base_dir}/1_planning/Configuration_Management_Plan.docx",
             shared_memory,
             "config_management_plan"
@@ -303,23 +303,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Risk Information Data Collection Form
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_charter:\n\n"
+            f"Below is the project_charter information:\n\n"
             f"{global_context['project_charter']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Mẫu thu thập thông tin rủi ro' (Risk Information Data Collection Form) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: nhận dạng rủi ro, phân tích nguyên nhân gốc, đánh giá rủi ro, xem xét và phản hồi."
+            "Use the above data to write a complete 'Risk Information Data Collection Form' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: risk identification, root cause analysis, risk assessment, review and response."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_charter'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả project_charter từ người dùng",
-            "expected_output": "Tóm tắt thông tin về rủi ro, nguyên nhân, đánh giá...",
+            "description": "User-provided project_charter information",
+            "expected_output": "Summary of risks, causes, assessment...",
             "input": global_context["project_charter"]
         }],
         callback=make_docx_callback(
-            "Mẫu thu thập thông tin rủi ro",
+            "Risk Information Data Collection Form",
             f"{output_base_dir}/1_planning/Risk_Information_Data_Collection_Form.docx",
             shared_memory,
             "risk_data_collection"
@@ -329,23 +329,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Risk Analysis Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin risk_data_collection:\n\n"
+            f"Below is the risk_data_collection information:\n\n"
             f"{global_context['risk_data_collection']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch phân tích rủi ro' (Risk Analysis Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục đích dự án, thông tin dự án, bảng phân tích rủi ro (điểm ưu tiên, chiến lược giảm thiểu, kế hoạch dự phòng)."
+            "Use the above data to write a complete 'Risk Analysis Plan' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: project purpose, project information, risk analysis table (priority score, mitigation strategy, contingency plan)."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'risk_data_collection'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'risk_data_collection'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả risk_data_collection từ người dùng",
-            "expected_output": "Tóm tắt thông tin về rủi ro, phân tích, chiến lược...",
+            "description": "User-provided risk_data_collection information",
+            "expected_output": "Summary of risks, analysis, strategies...",
             "input": global_context["risk_data_collection"]
         }],
         callback=make_docx_callback(
-            "Kế hoạch phân tích rủi ro",
+            "Risk Analysis Plan",
             f"{output_base_dir}/1_planning/Risk_Analysis_Plan.docx",
             shared_memory,
             "risk_analysis_plan"
@@ -355,32 +355,32 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Procurement Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_resource_plan:\n\n"
+            f"Below is the project_resource_plan information:\n\n"
             f"{global_context['project_resource_plan']}\n\n"
-            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"Below is the statement_of_work information:\n\n"
             f"{global_context['statement_of_work']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch mua sắm' (Procurement Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: giới thiệu, mục tiêu, thông tin mua sắm (người phụ trách, vật phẩm, rủi ro, thời gian), chiến lược mua sắm (chiến lược giá, phương pháp cạnh tranh, giới hạn ngân sách)."
+            "Use the above data to write a complete 'Procurement Plan' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: introduction, objectives, procurement information (responsible person, items, risks, schedule), procurement strategy (pricing strategy, competitive method, budget limits)."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_resource_plan' và 'statement_of_work'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_resource_plan' and 'statement_of_work'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_resource_plan từ người dùng",
-                "expected_output": "Tóm tắt thông tin về nguồn lực, vật tư, nhân sự...",
+                "description": "User-provided project_resource_plan information",
+                "expected_output": "Summary of resources, materials, personnel...",
                 "input": global_context["project_resource_plan"]
             },
             {
-                "description": "Thông tin mô tả statement_of_work từ người dùng",
-                "expected_output": "Tóm tắt thông tin về phạm vi, mục tiêu, tiến độ...",
+                "description": "User-provided statement_of_work information",
+                "expected_output": "Summary of scope, objectives, schedule...",
                 "input": global_context["statement_of_work"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch mua sắm",
+            "Procurement Plan",
             f"{output_base_dir}/1_planning/Procurement_Plan.docx",
             shared_memory,
             "procurement_plan"
@@ -390,23 +390,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Project Organization Chart
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_team_definition:\n\n"
+            f"Below is the project_team_definition information:\n\n"
             f"{global_context['project_team_definition']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Sơ đồ tổ chức dự án' (Project Organization Chart) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: sơ đồ tổ chức, người ra quyết định, tổ chức hỗ trợ."
+            "Use the above data to write a complete 'Project Organization Chart' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: organization chart, decision makers, support organization."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_team_definition'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_team_definition'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả project_team_definition từ người dùng",
-            "expected_output": "Tóm tắt thông tin về vai trò, tổ chức, hỗ trợ...",
+            "description": "User-provided project_team_definition information",
+            "expected_output": "Summary of roles, organization, support...",
             "input": global_context["project_team_definition"]
         }],
         callback=make_docx_callback(
-            "Sơ đồ tổ chức dự án",
+            "Project Organization Chart",
             f"{output_base_dir}/1_planning/Project_Organization_Chart.docx",
             shared_memory,
             "project_org_chart"
@@ -416,32 +416,32 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Roles and Responsibilities Matrix
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_team_definition:\n\n"
+            f"Below is the project_team_definition information:\n\n"
             f"{global_context['project_team_definition']}\n\n"
-            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"Below is the statement_of_work information:\n\n"
             f"{global_context['statement_of_work']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Ma trận vai trò và trách nhiệm' (Roles and Responsibilities Matrix) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: thiết lập ma trận trách nhiệm, mô tả mẫu vai trò và trách nhiệm, ma trận chuẩn và ma trận theo mô hình RACI."
+            "Use the above data to write a complete 'Roles and Responsibilities Matrix' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: responsibility matrix setup, sample role and responsibility descriptions, standard matrix and RACI model matrix."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_team_definition' và 'statement_of_work'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_team_definition' and 'statement_of_work'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_team_definition từ người dùng",
-                "expected_output": "Tóm tắt thông tin về vai trò, trách nhiệm...",
+                "description": "User-provided project_team_definition information",
+                "expected_output": "Summary of roles, responsibilities...",
                 "input": global_context["project_team_definition"]
             },
             {
-                "description": "Thông tin mô tả statement_of_work từ người dùng",
-                "expected_output": "Tóm tắt thông tin về hoạt động, trách nhiệm...",
+                "description": "User-provided statement_of_work information",
+                "expected_output": "Summary of activities, responsibilities...",
                 "input": global_context["statement_of_work"]
             }
         ],
         callback=make_docx_callback(
-            "Ma trận vai trò và trách nhiệm",
+            "Roles and Responsibilities Matrix",
             f"{output_base_dir}/1_planning/Roles_and_Responsibilities_Matrix.docx",
             shared_memory,
             "roles_responsibilities_matrix"
@@ -451,23 +451,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Required Approvals Matrix
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_approval:\n\n"
+            f"Below is the project_approval information:\n\n"
             f"{global_context['project_approval']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Ma trận phê duyệt bắt buộc' (Required Approvals Matrix) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục đích của dự án, mô tả mẫu vai trò và trách nhiệm, ma trận phê duyệt."
+            "Use the above data to write a complete 'Required Approvals Matrix' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: project purpose, sample role and responsibility descriptions, approval matrix."
         ),
         agent=project_manager_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_approval'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_approval'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả project_approval từ người dùng",
-            "expected_output": "Tóm tắt thông tin về phê duyệt, vai trò, trách nhiệm...",
+            "description": "User-provided project_approval information",
+            "expected_output": "Summary of approvals, roles, responsibilities...",
             "input": global_context["project_approval"]
         }],
         callback=make_docx_callback(
-            "Ma trận phê duyệt bắt buộc",
+            "Required Approvals Matrix",
             f"{output_base_dir}/1_planning/Required_Approvals_Matrix.docx",
             shared_memory,
             "required_approvals_matrix"
@@ -477,23 +477,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Activity Worksheet in WBS Dictionary Form
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"Below is the statement_of_work information:\n\n"
             f"{global_context['statement_of_work']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Bảng công việc theo dạng từ điển WBS' (Activity Worksheet in Work Breakdown Structure Dictionary Form) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: số nhiệm vụ, mô tả, hoạt động cụ thể, mục tiêu, tiêu chí chấp nhận, giả định, kỹ năng, tài nguyên, vật tư, ước lượng thời gian, chi phí, quan hệ phụ thuộc trước/sau, phê duyệt."
+            "Use the above data to write a complete 'Activity Worksheet in Work Breakdown Structure Dictionary Form' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: task number, description, specific activities, objectives, acceptance criteria, assumptions, skills, resources, materials, time estimate, cost, predecessor/successor dependencies, approval."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'statement_of_work'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'statement_of_work'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả statement_of_work từ người dùng",
-            "expected_output": "Tóm tắt thông tin về nhiệm vụ, mục tiêu, kỹ năng...",
+            "description": "User-provided statement_of_work information",
+            "expected_output": "Summary of tasks, objectives, skills...",
             "input": global_context["statement_of_work"]
         }],
         callback=make_docx_callback(
-            "Bảng công việc theo dạng từ điển WBS",
+            "Activity Worksheet in WBS Dictionary Form",
             f"{output_base_dir}/1_planning/Activity_Worksheet_WBS_Dictionary.docx",
             shared_memory,
             "activity_worksheet"
@@ -503,32 +503,32 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # WBS Resource Planning Template
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_resource_plan:\n\n"
+            f"Below is the project_resource_plan information:\n\n"
             f"{global_context['project_resource_plan']}\n\n"
-            f"Dưới đây là thông tin activity_worksheet:\n\n"
+            f"Below is the activity_worksheet information:\n\n"
             f"{global_context['activity_worksheet']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Mẫu lập kế hoạch nguồn lực WBS' (Work Breakdown Structure Resource Planning Template) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: kỹ năng cần thiết, ước lượng thời gian, phân bổ tài nguyên."
+            "Use the above data to write a complete 'Work Breakdown Structure Resource Planning Template' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: required skills, time estimate, resource allocation."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_resource_plan' và 'activity_worksheet'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_resource_plan' and 'activity_worksheet'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_resource_plan từ người dùng",
-                "expected_output": "Tóm tắt thông tin về nguồn lực, kỹ năng...",
+                "description": "User-provided project_resource_plan information",
+                "expected_output": "Summary of resources, skills...",
                 "input": global_context["project_resource_plan"]
             },
             {
-                "description": "Thông tin mô tả activity_worksheet từ người dùng",
-                "expected_output": "Tóm tắt thông tin về nhiệm vụ, thời gian...",
+                "description": "User-provided activity_worksheet information",
+                "expected_output": "Summary of tasks, time...",
                 "input": global_context["activity_worksheet"]
             }
         ],
         callback=make_docx_callback(
-            "Mẫu lập kế hoạch nguồn lực WBS",
+            "Work Breakdown Structure Resource Planning Template",
             f"{output_base_dir}/1_planning/WBS_Resource_Planning_Template.docx",
             shared_memory,
             "wbs_resource_planning"
@@ -538,23 +538,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Work Breakdown Structure (WBS)
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin activity_worksheet:\n\n"
+            f"Below is the activity_worksheet information:\n\n"
             f"{global_context['activity_worksheet']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Cấu trúc phân chia công việc' (Work Breakdown Structure - WBS) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: tên dự án, bộ phận, mã công việc, mô tả, người/nhóm phụ trách, thời hạn hoàn thành."
+            "Use the above data to write a complete 'Work Breakdown Structure (WBS)' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: project name, department, work code, description, responsible person/group, completion deadline."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'activity_worksheet'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'activity_worksheet'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả activity_worksheet từ người dùng",
-            "expected_output": "Tóm tắt thông tin về công việc, mã, người phụ trách...",
+            "description": "User-provided activity_worksheet information",
+            "expected_output": "Summary of work, code, responsible person...",
             "input": global_context["activity_worksheet"]
         }],
         callback=make_docx_callback(
-            "Cấu trúc phân chia công việc",
+            "Work Breakdown Structure",
             f"{output_base_dir}/1_planning/Work_Breakdown_Structure.docx",
             shared_memory,
             "wbs"
@@ -564,23 +564,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # COBIT Checklist and Review
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_charter:\n\n"
+            f"Below is the project_charter information:\n\n"
             f"{global_context['project_charter']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Danh sách kiểm tra và đánh giá COBIT' (COBIT Checklist and Review) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục tiêu kiểm soát COBIT, tóm tắt thành phần và quy trình COBIT, các nhóm chính (Lập kế hoạch, Triển khai, Hỗ trợ, Giám sát)."
+            "Use the above data to write a complete 'COBIT Checklist and Review' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: COBIT control objectives, summary of COBIT components and processes, main groups (Plan, Implement, Support, Monitor)."
         ),
         agent=researcher_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_charter'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả project_charter từ người dùng",
-            "expected_output": "Tóm tắt thông tin về kiểm soát, quy trình, nhóm COBIT...",
+            "description": "User-provided project_charter information",
+            "expected_output": "Summary of controls, processes, COBIT groups...",
             "input": global_context["project_charter"]
         }],
         callback=make_docx_callback(
-            "Danh sách kiểm tra và đánh giá COBIT",
+            "COBIT Checklist and Review",
             f"{output_base_dir}/1_planning/COBIT_Checklist_and_Review.docx",
             shared_memory,
             "cobit_checklist"
@@ -590,23 +590,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Request For Information
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"Below is the statement_of_work information:\n\n"
             f"{global_context['statement_of_work']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Yêu cầu thông tin' (Request For Information - RFI) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mục đích, quy trình RFI, hồ sơ doanh nghiệp, tính năng kỹ thuật sản phẩm, thông tin định giá và chi phí vòng đời."
+            "Use the above data to write a complete 'Request For Information (RFI)' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: purpose, RFI process, company profile, product technical features, pricing and lifecycle cost information."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'statement_of_work'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'statement_of_work'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả statement_of_work từ người dùng",
-            "expected_output": "Tóm tắt thông tin về mục tiêu, quy trình, tính năng...",
+            "description": "User-provided statement_of_work information",
+            "expected_output": "Summary of objectives, process, features...",
             "input": global_context["statement_of_work"]
         }],
         callback=make_docx_callback(
-            "Yêu cầu thông tin",
+            "Request For Information",
             f"{output_base_dir}/1_planning/Request_For_Information.docx",
             shared_memory,
             "rfi"
@@ -616,23 +616,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Root Cause Analysis
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin risk_data_collection:\n\n"
+            f"Below is the risk_data_collection information:\n\n"
             f"{global_context['risk_data_collection']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Phân tích nguyên nhân gốc rễ' (Root Cause Analysis) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: tóm tắt, thời gian xảy ra, phòng ban, ứng dụng bị ảnh hưởng, chuỗi sự kiện, hành động đề xuất."
+            "Use the above data to write a complete 'Root Cause Analysis' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: summary, occurrence time, department, affected application, event sequence, recommended actions."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'risk_data_collection'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'risk_data_collection'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả risk_data_collection từ người dùng",
-            "expected_output": "Tóm tắt thông tin về sự cố, nguyên nhân, giải pháp...",
+            "description": "User-provided risk_data_collection information",
+            "expected_output": "Summary of incident, cause, solution...",
             "input": global_context["risk_data_collection"]
         }],
         callback=make_docx_callback(
-            "Phân tích nguyên nhân gốc rễ",
+            "Root Cause Analysis",
             f"{output_base_dir}/1_planning/Root_Cause_Analysis.docx",
             shared_memory,
             "root_cause_analysis"
@@ -642,39 +642,39 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # Project Plan
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin project_charter:\n\n"
+            f"Below is the project_charter information:\n\n"
             f"{global_context['project_charter']}\n\n"
-            f"Dưới đây là thông tin statement_of_work:\n\n"
+            f"Below is the statement_of_work information:\n\n"
             f"{global_context['statement_of_work']}\n\n"
-            f"Dưới đây là thông tin wbs:\n\n"
+            f"Below is the wbs information:\n\n"
             f"{global_context['wbs']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Kế hoạch dự án' (Project Plan) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: sản phẩm chính, mốc thời gian, hoạt động, nguồn lực, áp dụng theo các giai đoạn SDLC."
+            "Use the above data to write a complete 'Project Plan' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: main deliverables, milestones, activities, resources, applied by SDLC phases."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'project_charter', 'statement_of_work', và 'wbs'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'project_charter', 'statement_of_work', and 'wbs'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[
             {
-                "description": "Thông tin mô tả project_charter từ người dùng",
-                "expected_output": "Tóm tắt thông tin về mục tiêu, nguồn lực...",
+                "description": "User-provided project_charter information",
+                "expected_output": "Summary of objectives, resources...",
                 "input": global_context["project_charter"]
             },
             {
-                "description": "Thông tin mô tả statement_of_work từ người dùng",
-                "expected_output": "Tóm tắt thông tin về sản phẩm, hoạt động...",
+                "description": "User-provided statement_of_work information",
+                "expected_output": "Summary of deliverables, activities...",
                 "input": global_context["statement_of_work"]
             },
             {
-                "description": "Thông tin mô tả wbs từ người dùng",
-                "expected_output": "Tóm tắt thông tin về công việc, lịch trình...",
+                "description": "User-provided wbs information",
+                "expected_output": "Summary of work, schedule...",
                 "input": global_context["wbs"]
             }
         ],
         callback=make_docx_callback(
-            "Kế hoạch dự án",
+            "Project Plan",
             f"{output_base_dir}/1_planning/Project_Plan.docx",
             shared_memory,
             "project_plan"
@@ -684,23 +684,23 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # List of Opportunities Summary
     tasks.append(Task(
         description=(
-            f"Dưới đây là thông tin business_case:\n\n"
+            f"Below is the business_case information:\n\n"
             f"{global_context['business_case']}\n\n"
-            "Hãy sử dụng dữ liệu trên để viết tài liệu 'Tổng hợp danh sách cơ hội' (List of Opportunities Summary) với nội dung hoàn chỉnh, cụ thể, không để trống bất kỳ phần nào. "
-            "Không được tạo template hoặc hướng dẫn, mà phải điền nội dung thực tế cho từng mục: mô tả, mức độ ưu tiên, ngày giao, người phụ trách, ghi chú."
+            "Use the above data to write a complete 'List of Opportunities Summary' document with specific content, leaving no section blank. "
+            "Do not create a template or instructions, but provide actual content for each section: description, priority, delivery date, responsible person, notes."
         ),
         agent=planning_agent,
         expected_output=(
-            "Một văn bản hoàn chỉnh, nội dung đã được điền đầy đủ dựa trên dữ liệu thực tế trong 'business_case'. "
-            "Không phải template mẫu, không có placeholder hay dấu ngoặc (). Sẵn sàng để chuyển sang file DOCX."
+            "A complete document, fully filled out based on actual data in 'business_case'. "
+            "Not a template, no placeholders or brackets (). Ready to export to DOCX."
         ),
         context=[{
-            "description": "Thông tin mô tả business_case từ người dùng",
-            "expected_output": "Tóm tắt thông tin về cơ hội, mức độ ưu tiên, người phụ trách...",
+            "description": "User-provided business_case information",
+            "expected_output": "Summary of opportunities, priority, responsible person...",
             "input": global_context["business_case"]
         }],
         callback=make_docx_callback(
-            "Tổng hợp danh sách cơ hội",
+            "List of Opportunities Summary",
             f"{output_base_dir}/1_planning/List_of_Opportunities_Summary.docx",
             shared_memory,
             "opportunities_summary"
@@ -710,25 +710,25 @@ def create_planning_tasks(shared_memory: SharedMemory, output_base_dir: str, inp
     # New Task: WBS Diagram for Work Breakdown Structure (Graphviz)
     tasks.append(Task(
         description=(
-            f"Dựa trên dữ liệu project_plan:\n\n"
-            f"project_plan:\n{global_context['project_plan'] or 'Không có dữ liệu'}\n\n"
-            f"Tạo một sơ đồ Work Breakdown Structure (WBS) để minh họa các gói công việc (work packages) của dự án, phân cấp theo cấu trúc cây. "
-            f"Sơ đồ phải bao gồm ít nhất 3 cấp độ (e.g., Dự án -> Giai đoạn -> Công việc cụ thể), với ít nhất 4 gói công việc ở cấp thấp nhất. "
-            f"Kết quả là mã Graphviz DOT định dạng một sơ đồ hướng (digraph), lưu vào file 'WBS_Diagram.dot' trong thư mục '{output_base_dir}/1_planning'. "
-            f"Render file DOT thành hình ảnh PNG bằng hàm create_image. "
-            f"Lưu mã DOT vào SharedMemory với khóa 'graphviz_wbs_diagram' và đường dẫn hình ảnh PNG vào SharedMemory với khóa 'image_wbs_diagram'."
+            f"Based on the project_plan data:\n\n"
+            f"project_plan:\n{global_context['project_plan'] or 'No data'}\n\n"
+            f"Create a Work Breakdown Structure (WBS) diagram to illustrate the project's work packages, structured as a tree. "
+            f"The diagram must include at least 3 levels (e.g., Project -> Phase -> Specific Task), with at least 4 work packages at the lowest level. "
+            f"The result is a Graphviz DOT code for a directed graph (digraph), saved to 'WBS_Diagram.dot' in the '{output_base_dir}/1_planning' folder. "
+            f"Render the DOT file as a PNG image using the create_image function. "
+            f"Save the DOT code to SharedMemory with key 'graphviz_wbs_diagram' and the PNG image path to SharedMemory with key 'image_wbs_diagram'."
         ),
         agent=planning_agent, 
         expected_output=(
-            f"Mã Graphviz DOT hoàn chỉnh minh họa sơ đồ WBS, lưu trong '{output_base_dir}/1_planning/WBS_Diagram.dot' và SharedMemory với khóa 'graphviz_wbs_diagram'. "
-            f"Hình ảnh PNG được render từ DOT, lưu trong '{output_base_dir}/1_planning/WBS_Diagram.png' và SharedMemory với khóa 'image_wbs_diagram'. "
-            f"Sơ đồ rõ ràng, có ít nhất 3 cấp độ và 4 gói công việc ở cấp thấp nhất."
+            f"Complete Graphviz DOT code illustrating the WBS diagram, saved in '{output_base_dir}/1_planning/WBS_Diagram.dot' and SharedMemory with key 'graphviz_wbs_diagram'. "
+            f"PNG image rendered from DOT, saved in '{output_base_dir}/1_planning/WBS_Diagram.png' and SharedMemory with key 'image_wbs_diagram'. "
+            f"The diagram is clear, with at least 3 levels and 4 work packages at the lowest level."
         ),
         context=[
             {
-                "description": "Thông tin từ project_plan",
-                "expected_output": "Tóm tắt kế hoạch dự án để xác định các gói công việc và cấu trúc phân cấp.",
-                "input": global_context["project_plan"] or "Không có dữ liệu"
+                "description": "Information from project_plan",
+                "expected_output": "Summarize the project plan to identify work packages and hierarchy.",
+                "input": global_context["project_plan"] or "No data"
             }
         ],
         callback=lambda output: (
